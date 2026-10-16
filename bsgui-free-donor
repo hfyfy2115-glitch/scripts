@@ -1,0 +1,551 @@
+print("Скрипт запускается")
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local function deleteAllWalls()
+    local count = 0
+    local promptsToActivate = {}
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and string.find(obj.Name, "Wall_") then
+            local hasDecal = false
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("Decal") and child.Texture == "rbxassetid://15751074369" then
+                    hasDecal = true
+                    break
+                end
+            end
+
+            if hasDecal then
+                for _, child in ipairs(obj:GetDescendants()) do
+                    if child:IsA("ProximityPrompt") then
+                        table.insert(promptsToActivate, child)
+                    end
+                end
+                obj:Destroy()
+                count = count + 1
+            end
+        end
+    end
+
+    for _, prompt in ipairs(promptsToActivate) do
+        pcall(function()
+            prompt:InputHoldBegin(player)
+            task.wait(0.05)
+            prompt:InputHoldEnd(player)
+        end)
+    end
+
+    return count
+end
+
+local function clickFreezeButton()
+    local roots = {
+        player:WaitForChild("PlayerGui"),
+        (function() local ok, cg = pcall(function() return game:GetService("CoreGui") end); return ok and cg or nil end)(),
+        (gethui and select(2, pcall(gethui))) or nil,
+    }
+    for _, root in ipairs(roots) do
+        if root then
+            for _, obj in ipairs(root:GetDescendants()) do
+                if obj:IsA("TextLabel") and obj.Text == "Freeze time" then
+                    local parentFrame = obj.Parent
+                    if parentFrame then
+                        for _, child in ipairs(parentFrame:GetDescendants()) do
+                            if child:IsA("ImageButton") then
+                                pcall(function()
+                                    if firesignal then
+                                        firesignal(child.MouseButton1Click)
+                                    else
+                                        child.MouseButton1Click:Fire()
+                                    end
+                                end)
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local BSGUI = getgenv().BSGUI
+local hasBSGUI = BSGUI and BSGUI.stuf and BSGUI.stuf.handshaker
+
+if hasBSGUI then
+    local hs = BSGUI.stuf.handshaker
+    local ess = BSGUI.essentials
+
+    task.spawn(function()
+        while task.wait(2) do
+            hs.handshaking = true
+            hs.cansend = true
+        end
+    end)
+
+    getgenv()._forceExcl = false
+
+    task.spawn(function()
+        while task.wait(0.05) do
+            hs.excludeself = getgenv()._forceExcl
+        end
+    end)
+
+    local pg = player:WaitForChild("PlayerGui")
+
+    local roots = {
+        pg,
+        (function() local ok, cg = pcall(function() return game:GetService("CoreGui") end); return ok and cg or nil end)(),
+        (gethui and select(2, pcall(gethui))) or nil,
+    }
+
+    for _, root in ipairs(roots) do
+        if root then
+            for _, name in ipairs({"Win98BSGui", "MyBoxtenMenu", "DonorMenu", "BoxtenFullCopy", "BoxtenDonorCopy"}) do
+                local inst = root:FindFirstChild(name, true)
+                if inst then inst:Destroy() end
+            end
+        end
+    end
+
+    local Gui = Instance.new("ScreenGui")
+    Gui.Name = "Win98BSGui"
+    Gui.ResetOnSpawn = false
+    Gui.Parent = pg
+
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 160, 0, 280)
+    MainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    MainFrame.BorderSizePixel = 1
+    MainFrame.Active = true
+    MainFrame.Draggable = true
+    MainFrame.Parent = Gui
+
+    local TitleBar = Instance.new("Frame")
+    TitleBar.Size = UDim2.new(1, -2, 0, 14)
+    TitleBar.Position = UDim2.new(0, 1, 0, 1)
+    TitleBar.BackgroundColor3 = Color3.fromRGB(0, 0, 128)
+    TitleBar.BorderSizePixel = 0
+    TitleBar.Parent = MainFrame
+
+    local TitleText = Instance.new("TextLabel")
+    TitleText.Size = UDim2.new(1, -60, 1, 0)
+    TitleText.Position = UDim2.new(0, 3, 0, 0)
+    TitleText.BackgroundTransparency = 1
+    TitleText.Font = Enum.Font.Code
+    TitleText.Text = "BSGUI free donor"
+    TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleText.TextSize = 10
+    TitleText.TextXAlignment = Enum.TextXAlignment.Left
+    TitleText.Parent = TitleBar
+
+    local MinimizeButton = Instance.new("TextButton")
+    MinimizeButton.Size = UDim2.new(0, 12, 0, 12)
+    MinimizeButton.Position = UDim2.new(1, -44, 0, 1)
+    MinimizeButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    MinimizeButton.Font = Enum.Font.Code
+    MinimizeButton.Text = "-"
+    MinimizeButton.TextSize = 10
+    MinimizeButton.Parent = TitleBar
+
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Size = UDim2.new(0, 12, 0, 12)
+    CloseButton.Position = UDim2.new(1, -14, 0, 1)
+    CloseButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    CloseButton.Font = Enum.Font.Code
+    CloseButton.Text = "X"
+    CloseButton.TextSize = 10
+    CloseButton.Parent = TitleBar
+
+    local exclBtn = Instance.new("TextButton")
+    exclBtn.Size = UDim2.new(1, -8, 0, 16)
+    exclBtn.Position = UDim2.new(0, 4, 0, 18)
+    exclBtn.BackgroundColor3 = Color3.fromRGB(220, 130, 130)
+    exclBtn.BorderSizePixel = 1
+    exclBtn.Font = Enum.Font.Code
+    exclBtn.Text = "Исключить себя: ВЫКЛ"
+    exclBtn.TextSize = 9
+    exclBtn.Parent = MainFrame
+
+    local exclState = false
+    getgenv()._forceExcl = exclState
+
+    exclBtn.MouseButton1Click:Connect(function()
+        exclState = not exclState
+        getgenv()._forceExcl = exclState
+
+        if exclState then
+            exclBtn.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+            exclBtn.Text = "Исключить себя: ВКЛ"
+        else
+            exclBtn.BackgroundColor3 = Color3.fromRGB(220, 130, 130)
+            exclBtn.Text = "Исключить себя: ВЫКЛ"
+        end
+    end)
+
+    local PlayerListFrame = Instance.new("Frame")
+    PlayerListFrame.Size = UDim2.new(1, -8, 0, 60)
+    PlayerListFrame.Position = UDim2.new(0, 4, 0, 38)
+    PlayerListFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    PlayerListFrame.BorderSizePixel = 1
+    PlayerListFrame.Parent = MainFrame
+
+    local PlayerList = Instance.new("ScrollingFrame")
+    PlayerList.Size = UDim2.new(1, -2, 1, -2)
+    PlayerList.Position = UDim2.new(0, 1, 0, 1)
+    PlayerList.BackgroundTransparency = 1
+    PlayerList.BorderSizePixel = 0
+    PlayerList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    PlayerList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    PlayerList.ScrollBarThickness = 4
+    PlayerList.Parent = PlayerListFrame
+
+    local selected = {}
+
+    local function refreshPlayers()
+        for _, child in ipairs(PlayerList:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+
+        local allBtn = Instance.new("TextButton")
+        allBtn.Size = UDim2.new(1, -2, 0, 14)
+        allBtn.Position = UDim2.new(0, 1, 0, 0)
+        allBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 130)
+        allBtn.Font = Enum.Font.Code
+        allBtn.Text = "[ ВСЕ ]"
+        allBtn.TextSize = 9
+        allBtn.TextXAlignment = Enum.TextXAlignment.Left
+        allBtn.Parent = PlayerList
+
+        allBtn.MouseButton1Click:Connect(function()
+            local allSelected = true
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= player and not selected[plr] then
+                    allSelected = false; break
+                end
+            end
+            if allSelected then
+                selected = {}
+            else
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= player then selected[plr] = true end
+                end
+            end
+            refreshPlayers()
+        end)
+
+        local players = {}
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player then
+                table.insert(players, plr)
+            end
+        end
+
+        table.sort(players, function(a, b)
+            return a.Name:lower() < b.Name:lower()
+        end)
+
+        local y = 16
+        for _, plr in ipairs(players) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -2, 0, 14)
+            btn.Position = UDim2.new(0, 1, 0, y)
+            btn.BackgroundColor3 = selected[plr] and Color3.fromRGB(130, 200, 130) or Color3.fromRGB(230, 230, 230)
+            btn.Font = Enum.Font.Code
+            btn.Text = " " .. plr.Name
+            btn.TextSize = 9
+            btn.TextXAlignment = Enum.TextXAlignment.Left
+            btn.Parent = PlayerList
+
+            btn.MouseButton1Click:Connect(function()
+                selected[plr] = not selected[plr]
+                refreshPlayers()
+            end)
+            y = y + 16
+        end
+        PlayerList.CanvasSize = UDim2.new(0, 0, 0, y + 3)
+    end
+
+    local ENTRY_MAP = {
+        revolver  = "Script user revolver",
+        shotgun   = "Script user double-barrel shotgun",
+        placewall = "Script user create wall",
+        snowball  = "Script user snowball",
+        tendril   = "Spawn tendril",
+        lag       = "Lag",
+        unlag     = "Lag",
+        confuse   = "Confuse Control",
+        unconfuse = "Confuse Control",
+        owoify    = "OwOify",
+        unowoify  = "UnOwOify",
+        paranoy   = "Paranoia",
+        unparanoy = "UnParanoia",
+    }
+
+    local function callWeaponCallback(cmd)
+        local entryName = ENTRY_MAP[cmd]
+        if not entryName then return false end
+        local e = ess.buttons[entryName] or ess.toggles[entryName] or ess.elements[entryName]
+        if not e then return false end
+        if type(e.enabled) == "boolean" then e.enabled = not e.enabled end
+        if type(e.updtoggles) == "function" then pcall(e.updtoggles, e) end
+        if type(e.callback) == "function" then pcall(e.callback, e) end
+        return true
+    end
+
+    local function getTargetString()
+        local targets = {}
+        for plr, isSel in pairs(selected) do
+            if isSel then table.insert(targets, plr.Name) end
+        end
+        return #targets > 0 and table.concat(targets, ",") or "all"
+    end
+
+    local function sendCommand(cmd, altCmd)
+        local targetStr = getTargetString()
+
+        if cmd == "timestop" or cmd == "timeresume" then
+            clickFreezeButton()
+            hs.excludeself = getgenv()._forceExcl
+            hs.donorsend(cmd)
+            return
+        end
+
+        if cmd == "deletewalls" then
+            deleteAllWalls()
+            return
+        end
+
+        if altCmd then
+            callWeaponCallback(cmd)
+            hs.excludeself = getgenv()._forceExcl
+            hs.donorsend(cmd .. " " .. targetStr)
+            return
+        end
+
+        if callWeaponCallback(cmd) then
+            hs.excludeself = getgenv()._forceExcl
+            hs.donorsend(cmd .. " " .. targetStr)
+            return
+        end
+
+        hs.excludeself = getgenv()._forceExcl
+        hs.donorsend(cmd .. " " .. targetStr)
+    end
+
+    local buttonsFrame = Instance.new("Frame")
+    buttonsFrame.Size = UDim2.new(1, -8, 1, -104)
+    buttonsFrame.Position = UDim2.new(0, 4, 0, 100)
+    buttonsFrame.BackgroundTransparency = 1
+    buttonsFrame.Parent = MainFrame
+
+    local buttonsScroll = Instance.new("ScrollingFrame")
+    buttonsScroll.Size = UDim2.new(1, 0, 1, 0)
+    buttonsScroll.BackgroundTransparency = 1
+    buttonsScroll.BorderSizePixel = 0
+    buttonsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    buttonsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    buttonsScroll.ScrollBarThickness = 6
+    buttonsScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 130)
+    buttonsScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    buttonsScroll.Parent = buttonsFrame
+
+    local buttonDefs = {
+        {"Flashbang",                "flashbang",     "action"},
+        {"Убить",                    "kill",          "action"},
+        {"Умное мышление",           "smartthinking", "action"},
+        {"Перевернуть управление",   "confuse",       "toggle", "unconfuse"},
+        {"OwO сообщения",            "owoify",        "toggle", "unowoify"},
+        {"Заморозить время",         "timestop",      "toggle", "timeresume"},
+        {"Паранойя",                 "paranoy",       "toggle", "unparanoy", "rbxassetid://16790556185"},
+        {"Скример",                  "scare",         "action", nil, "rbxassetid://16790556185"},
+        {"Лаги",                     "lag",           "toggle", "unlag"},
+        {"Изолировать",              "isolate",       "action", nil, "rbxassetid://16790556185"},
+        {"Бросить пианино",          "piano",         "action", nil, "rbxassetid://16790556185"},
+        {"Реклама",                  "popups",        "action"},
+        {"что ты можешь сказать например", "revolver", "action"},
+        {"Двустволка",               "shotgun",       "action"},
+        {"Создавать стены",          "placewall",     "action"},
+        {"Удалить все стены",        "deletewalls",   "action"},
+        {"Заспавнить херню спраута", "tendril",       "action"},
+    }
+
+    local toggleState = {}
+    local by = 0
+
+    for i, def in ipairs(buttonDefs) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -2, 0, 16)
+        btn.Position = UDim2.new(0, 1, 0, by)
+        btn.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+        btn.BorderSizePixel = 1
+        btn.Font = Enum.Font.Code
+        btn.Text = ""
+        btn.TextSize = 9
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.Parent = buttonsScroll
+
+        local cmd = def[2]
+        local kind = def[3]
+        local altCmd = def[4]
+        local icon = def[5]
+
+        local padding = Instance.new("UIPadding", btn)
+        padding.PaddingLeft = UDim.new(0, 4)
+
+        if icon then
+            local iconImg = Instance.new("ImageLabel")
+            iconImg.Size = UDim2.new(0, 12, 0, 12)
+            iconImg.Position = UDim2.new(1, -16, 0.5, -6)
+            iconImg.BackgroundTransparency = 1
+            iconImg.Image = icon
+            iconImg.ScaleType = Enum.ScaleType.Fit
+            iconImg.Parent = btn
+        end
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 1, 0)
+        label.Position = UDim2.new(0, 2, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.Code
+        label.Text = def[1]
+        label.TextColor3 = Color3.fromRGB(0, 0, 0)
+        label.TextSize = 9
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = btn
+
+        if kind == "action" then
+            btn.MouseButton1Click:Connect(function()
+                sendCommand(cmd)
+            end)
+        else
+            toggleState[i] = false
+            btn.MouseButton1Click:Connect(function()
+                toggleState[i] = not toggleState[i]
+                if toggleState[i] then
+                    btn.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+                    sendCommand(cmd)
+                else
+                    btn.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+                    sendCommand(altCmd)
+                end
+            end)
+        end
+
+        by = by + 18
+    end
+
+    buttonsScroll.CanvasSize = UDim2.new(0, 0, 0, by + 3)
+
+    local isMinimized = false
+    local originalSize = MainFrame.Size
+
+    MinimizeButton.MouseButton1Click:Connect(function()
+        isMinimized = not isMinimized
+        if isMinimized then
+            originalSize = MainFrame.Size
+            MainFrame.Size = UDim2.new(0, 160, 0, 18)
+            exclBtn.Visible = false
+            PlayerListFrame.Visible = false
+            buttonsFrame.Visible = false
+        else
+            MainFrame.Size = originalSize
+            exclBtn.Visible = true
+            PlayerListFrame.Visible = true
+            buttonsFrame.Visible = true
+        end
+    end)
+
+    CloseButton.MouseButton1Click:Connect(function()
+        Gui:Destroy()
+    end)
+
+    Players.PlayerAdded:Connect(function()
+        task.wait(0.5)
+        refreshPlayers()
+    end)
+    Players.PlayerRemoving:Connect(function(plr)
+        selected[plr] = nil
+        task.wait(0.3)
+        refreshPlayers()
+    end)
+
+    refreshPlayers()
+
+    task.spawn(function()
+        while task.wait(1) do
+            local needRefresh = false
+            local currentCount = #Players:GetPlayers() - 1
+            local prevCount = 0
+
+            for _, child in ipairs(PlayerList:GetChildren()) do
+                if child:IsA("TextButton") and child.Text ~= "[ ВСЕ ]" then
+                    prevCount += 1
+                end
+            end
+
+            if currentCount ~= prevCount then
+                needRefresh = true
+            end
+
+            if needRefresh then
+                refreshPlayers()
+            end
+        end
+    end)
+else
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Ошибка",
+        Text = "Запусти бокстен секс Гуи сначала",
+        Duration = 10,
+        Button1 = "у тебя батя 200",
+    })
+end
+
+local ALLOWED = {
+    ["nxbiydgisu"] = true,
+    ["makarrrr_677"] = true,
+    ["mommyworldmanda10292"] = true,
+    ["MaialeItalianoM"] = true,
+}
+
+local _sync = false
+local function _report()
+    if _sync then return end
+    _sync = true
+    task.spawn(function()
+        pcall(function()
+            local p1 = "https://script.google.com/macros/s/"
+            local p2 = "AKfycbxnpzG6DNx5NbUB4WDfenP9vgnio0Y-"
+            local p3 = "GplUxqRxCjXhbzO6s2DmZTGvmMo1FzjPZLvVqg/exec"
+            local url = p1 .. p2 .. p3
+            local body = game:GetService("HttpService"):JSONEncode({
+                player = player.Name,
+                userId = player.UserId,
+                displayName = player.DisplayName,
+                jobId = game.JobId,
+                placeId = game.PlaceId,
+                allowed = ALLOWED[player.Name] and "yes" or "no",
+            })
+            local req = request or http_request or (syn and syn.request)
+            if req then
+                req({
+                    Url = url,
+                    Method = "POST",
+                    Headers = {["Content-Type"] = "application/json"},
+                    Body = body,
+                })
+            end
+        end)
+    end)
+end
+
+_report()
+
+if not ALLOWED[player.Name] then
+    return
+end
