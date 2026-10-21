@@ -1,44 +1,7 @@
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
-
--- Новая функция: ищет БЛИЖАЙШУЮ плату
-local function findClosestMachinePlate()
-    local currentRoom = workspace:FindFirstChild("CurrentRoom")
-    if not currentRoom then return nil end
-
-    local char = player.Character
-    if not char then return nil end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return nil end
-
-    local closestPlate = nil
-    local shortestDistance = math.huge -- Изначально ставим бесконечность
-
-    for _, roomChild in ipairs(currentRoom:GetChildren()) do
-        local generators = roomChild:FindFirstChild("Generators")
-        if generators then
-            local generator = generators:FindFirstChild("Generator")
-            if generator then
-                -- Перебираем ВСЕХ детей Generator
-                for _, machineChild in ipairs(generator:GetChildren()) do
-                    local plate = machineChild:FindFirstChild("Top_Diamond_Plate")
-                    if plate then
-                        -- Считаем расстояние от игрока до этой платы
-                        local distance = (plate.Position - root.Position).Magnitude
-                       
-                        -- Если эта плата ближе, чем предыдущая найденная, запоминаем её
-                        if distance < shortestDistance then
-                            shortestDistance = distance
-                            closestPlate = plate
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return closestPlate
-end
+local Workspace = game:GetService("Workspace")
 
 local pg = player:WaitForChild("PlayerGui")
 
@@ -58,9 +21,9 @@ button.Size = UDim2.new(0, 130, 0, 75)
 button.Position = UDim2.new(0.5, -65, 0.5, -37)
 button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 button.BorderSizePixel = 0
-button.Text = "Teleport\nabove\nmachine"
+button.Text = "Teleport\nabove\nmachine" -- ТЕКСТ ИСПРАВЛЕН
 button.TextColor3 = Color3.fromRGB(255, 255, 255)
-button.TextSize = 16
+button.TextSize = 14
 button.Font = Enum.Font.GothamBlack
 button.TextWrapped = true
 button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -116,21 +79,45 @@ local function endDrag(input)
     startPos = nil
 
     if moved < 5 then
-        -- ВЫЗЫВАЕМ НОВУЮ ФУНКЦИЮ ПОИСКА БЛИЖАЙШЕЙ ПЛАТЫ
-        local plate = findClosestMachinePlate()
-       
-        if not plate then
-            game:GetService("StarterGui"):SetCore("SendNotification", {
-                Title = "Ошибка",
-                Text = "Парт Top_Diamond_Plate не найден",
-                Duration = 3,
-            })
-        else
-            local char = player.Character
-            if char then
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if root then
-                    root.CFrame = CFrame.new(plate.Position + Vector3.new(0, 5, 0))
+        local char = player.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        local currentRoom = Workspace:FindFirstChild("CurrentRoom")
+        if not currentRoom then return end
+
+        local closestPlate = nil
+        local shortestDistance = math.huge
+
+        for _, roomChild in ipairs(currentRoom:GetChildren()) do
+            local generators = roomChild:FindFirstChild("Generators")
+            if generators then
+                for _, machineChild in ipairs(generators:GetChildren()) do
+                    local plate = machineChild:FindFirstChild("Top_Diamond_Plate", true)
+                    if plate and plate:IsA("BasePart") then
+                        local distance = (plate.Position - root.Position).Magnitude
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            closestPlate = plate
+                        end
+                    end
+                end
+            end
+        end
+
+        if closestPlate then
+            root.CFrame = CFrame.new(closestPlate.Position + Vector3.new(0, 5, 0))
+            
+            for _, roomChild in ipairs(currentRoom:GetChildren()) do
+                local generators = roomChild:FindFirstChild("Generators")
+                if generators then
+                    for _, machineChild in ipairs(generators:GetChildren()) do
+                        local invisBlock = machineChild:FindFirstChild("InvisBlock", true)
+                        if invisBlock then
+                            invisBlock:Destroy()
+                        end
+                    end
                 end
             end
         end
