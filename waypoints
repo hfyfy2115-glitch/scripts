@@ -1,0 +1,30 @@
+local Workspace = game:GetService("Workspace")
+
+task.spawn(function()
+    while task.wait(1) do
+        local currentRoom = Workspace:FindFirstChild("CurrentRoom")
+        if currentRoom then
+            for _, roomChild in ipairs(currentRoom:GetChildren()) do
+                local waypoints = roomChild:FindFirstChild("Waypoints")
+                
+                if waypoints then
+                    for _, obj in ipairs(waypoints:GetDescendants()) do
+                        if obj:IsA("BasePart") and obj.Transparency >= 1 then
+                            
+                            for _, child in ipairs(obj:GetChildren()) do
+                                if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
+                                    child:Destroy()
+                                end
+                            end
+                            
+                            obj.CanCollide = false
+                            obj.Anchored = true
+                            obj.Transparency = 0
+                            
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
