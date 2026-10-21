@@ -1,29 +1,43 @@
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 
-local function findMachinePlate()
+-- Новая функция: ищет БЛИЖАЙШУЮ плату
+local function findClosestMachinePlate()
     local currentRoom = workspace:FindFirstChild("CurrentRoom")
     if not currentRoom then return nil end
+
+    local char = player.Character
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+
+    local closestPlate = nil
+    local shortestDistance = math.huge -- Изначально ставим бесконечность
 
     for _, roomChild in ipairs(currentRoom:GetChildren()) do
         local generators = roomChild:FindFirstChild("Generators")
         if generators then
             local generator = generators:FindFirstChild("Generator")
             if generator then
-                local baseMachine = generator:FindFirstChild("BaseMachine")
-                if baseMachine then
-                    local plate = baseMachine:FindFirstChild("Top_Diamond_Plate")
+                -- Перебираем ВСЕХ детей Generator
+                for _, machineChild in ipairs(generator:GetChildren()) do
+                    local plate = machineChild:FindFirstChild("Top_Diamond_Plate")
                     if plate then
-                        return plate
+                        -- Считаем расстояние от игрока до этой платы
+                        local distance = (plate.Position - root.Position).Magnitude
+                       
+                        -- Если эта плата ближе, чем предыдущая найденная, запоминаем её
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            closestPlate = plate
+                        end
                     end
                 end
             end
         end
     end
-
-    return nil
+    return closestPlate
 end
 
 local pg = player:WaitForChild("PlayerGui")
@@ -102,7 +116,9 @@ local function endDrag(input)
     startPos = nil
 
     if moved < 5 then
-        local plate = findMachinePlate()
+        -- ВЫЗЫВАЕМ НОВУЮ ФУНКЦИЮ ПОИСКА БЛИЖАЙШЕЙ ПЛАТЫ
+        local plate = findClosestMachinePlate()
+       
         if not plate then
             game:GetService("StarterGui"):SetCore("SendNotification", {
                 Title = "Ошибка",
