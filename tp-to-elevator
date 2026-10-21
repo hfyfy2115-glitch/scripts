@@ -1,0 +1,160 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+
+-- Функция для телепорта к лифту
+local function teleportToElevator()
+local elevators = workspace:FindFirstChild("Elevators")
+if not elevators then return false, "Папка Elevators не найдена" end
+
+local elevator = elevators:FindFirstChild("Elevator")
+if not elevator then return false, "Объект Elevator не найден" end
+
+local children = elevator:GetChildren()
+if #children < 39 then return false, "У Elevator меньше 39 детей" end
+
+local target = children[39]
+
+-- Если это модель, берем её главный парт
+if target:IsA("Model") then
+target = target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")
+end
+
+if not target or not target:IsA("BasePart") then
+return false, "39-й ребенок не является партом или моделью с партом"
+end
+
+local char = player.Character
+if char then
+local root = char:FindFirstChild("HumanoidRootPart")
+if root then
+root.CFrame = CFrame.new(target.Position + Vector3.new(0, 5, 0))
+return true
+end
+end
+return false, "Персонаж не найден"
+end
+
+local pg = player:WaitForChild("PlayerGui")
+
+-- Удаляем старую кнопку, если она была
+local oldGui = pg:FindFirstChild("ElevatorTeleportGui")
+if oldGui then
+oldGui:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ElevatorTeleportGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = pg
+
+local button = Instance.new("TextButton")
+button.Name = "ElevatorButton"
+button.Size = UDim2.new(0, 130, 0, 75)
+button.Position = UDim2.new(0.3, -65, 0.5, -37) -- Чуть левее, чтобы не перекрывать кнопку генератора
+button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+button.BorderSizePixel = 0
+button.Text = "Teleport\nto\nElevator"
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.TextSize = 16
+button.Font = Enum.Font.GothamBlack
+button.TextWrapped = true
+button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+button.TextStrokeTransparency = 0
+button.Active = false
+button.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 22)
+corner.Parent = button
+
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 5
+stroke.Color = Color3.fromRGB(220, 220, 220)
+stroke.Transparency = 0
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke.Parent = button
+
+local padding = Instance.new("UIPadding")
+padding.PaddingTop = UDim.new(0, 4)
+padding.PaddingBottom = UDim.new(0, 4)
+padding.PaddingLeft = UDim.new(0, 6)
+padding.PaddingRight = UDim.new(0, 6)
+padding.Parent = button
+
+local dragging = false
+local dragStart = nil
+local startPos = nil
+local moved = 0
+
+local function beginDrag(input)
+dragging = true
+moved = 0
+dragStart = Vector2.new(input.Position.X, input.Position.Y)
+startPos = button.Position
+end
+
+local function updateDrag(input)
+if not dragging or not dragStart then return end
+local current = Vector2.new(input.Position.X, input.Position.Y)
+local delta = current - dragStart
+moved = math.max(moved, delta.Magnitude)
+button.Position = UDim2.new(
+startPos.X.Scale, startPos.X.Offset + delta.X,
+startPos.Y.Scale, startPos.Y.Offset + delta.Y
+)
+end
+
+local function endDrag(input)
+if not dragging then return end
+dragging = false
+dragStart = nil
+startPos = nil
+
+-- Если это был клик, а не перетаскивание
+if moved < 5 then
+local success, errorMsg = teleportToElevator()
+if not success then
+game:GetService("StarterGui"):SetCore("SendNotification", {
+Title = "Ошибка",
+Text = errorMsg,
+Duration = 3,
+})
+end
+end
+end
+
+button.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1
+or input.UserInputType == Enum.UserInputType.Touch then
+beginDrag(input)
+end
+end)
+
+button.InputChanged:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseMovement
+or input.UserInputType == Enum.UserInputType.Touch then
+updateDrag(input)
+end
+end)
+
+button.InputEnded:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1
+or input.UserInputType == Enum.UserInputType.Touch then
+endDrag(input)
+end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+or input.UserInputType == Enum.UserInputType.Touch) then
+updateDrag(input)
+end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+or input.UserInputType == Enum.UserInputType.Touch) then
+endDrag(input)
+end
+end)
