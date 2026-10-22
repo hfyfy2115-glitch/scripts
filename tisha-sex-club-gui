@@ -1,0 +1,695 @@
+if _G.StopOldCircleWalk then pcall(function() _G.StopOldCircleWalk() end) end
+if _G.AntiNoclipConnection then pcall(function() _G.AntiNoclipConnection:Disconnect() end) _G.AntiNoclipConnection = nil end
+pcall(function()
+    local pg = game.Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if pg then
+        local old = pg:FindFirstChild("Win98WalkGui")
+        if old then old:Destroy() end
+    end
+    for _, name in ipairs({"VisualClone", "CircleCenter", "CirclePlatform"}) do
+        local obj = workspace:FindFirstChild(name)
+        if obj then obj:Destroy() end
+    end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == "big fat transparent sphere" then
+            obj:Destroy()
+        end
+    end
+end)
+
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local isRunning = false
+local isCameraCentered = true
+local isZigzagEnabled = false
+local isExtraSettingsOpen = false
+local isFloatEnabled = false
+
+local RADIUS = 5
+local SPEED = 2.5
+local ZIGZAG_SPEED = 12
+local ZIGZAG_HEIGHT = 1
+local PLATFORM_SIZE = 15
+local FOOT_OFFSET = 2.8
+
+local angle = 0
+local zigzagTime = 0
+local connection = nil
+local currentCenter = nil
+local visualClone = nil
+local centerBlock = nil
+local platform = nil
+local floatConnection = nil
+
+local cameraRotX = 0
+local cameraRotY = 0
+local cameraDistance = 20
+local lastTouchPos = nil
+local lastMousePos = nil
+local isRMBHeld = false
+
+-- [FIX] определяем, тач-ли это устройство
+local isTouchDevice = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+
+local bodyPartsCache = nil
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "Win98WalkGui"
+Gui.ResetOnSpawn = false
+Gui.Parent = player.PlayerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 310, 0, 190)
+MainFrame.Position = UDim2.new(0.3, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+MainFrame.BorderSizePixel = 1
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = Gui
+
+local MiniFrame = Instance.new("Frame")
+MiniFrame.Size = UDim2.new(0, 160, 0, 100)
+MiniFrame.Position = UDim2.new(0.3, 0, 0.3, 0)
+MiniFrame.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+MiniFrame.BorderSizePixel = 1
+MiniFrame.Active = true
+MiniFrame.Draggable = true
+MiniFrame.Visible = false
+MiniFrame.Parent = Gui
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, -4, 0, 18)
+TitleBar.Position = UDim2.new(0, 2, 0, 2)
+TitleBar.BackgroundColor3 = Color3.fromRGB(0, 0, 128)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local Icon = Instance.new("ImageLabel")
+Icon.Size = UDim2.new(0, 14, 0, 14)
+Icon.Position = UDim2.new(0, 4, 0, 2)
+Icon.BackgroundTransparency = 1
+Icon.Image = "rbxassetid://137805772937013"
+Icon.Parent = TitleBar
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -90, 1, 0)
+TitleText.Position = UDim2.new(0, 20, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Font = Enum.Font.Code
+TitleText.Text = "Тisha's sex club gui"
+TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleText.TextSize = 14
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Parent = TitleBar
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 14, 0, 14)
+CloseButton.Position = UDim2.new(1, -16, 0, 2)
+CloseButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+CloseButton.Font = Enum.Font.Code
+CloseButton.Text = "X"
+CloseButton.TextSize = 12
+CloseButton.Parent = TitleBar
+
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Size = UDim2.new(0, 14, 0, 14)
+MinimizeButton.Position = UDim2.new(1, -48, 0, 2)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+MinimizeButton.Font = Enum.Font.Code
+MinimizeButton.Text = "_"
+MinimizeButton.TextSize = 12
+MinimizeButton.Parent = TitleBar
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 130, 0, 30)
+ToggleButton.Position = UDim2.new(0, 15, 0, 35)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+ToggleButton.Font = Enum.Font.Code
+ToggleButton.Text = "Включить"
+ToggleButton.TextSize = 12
+ToggleButton.Parent = MainFrame
+
+local CamCenterButton = Instance.new("TextButton")
+CamCenterButton.Size = UDim2.new(0, 140, 0, 30)
+CamCenterButton.Position = UDim2.new(0, 155, 0, 35)
+CamCenterButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+CamCenterButton.Font = Enum.Font.Code
+CamCenterButton.Text = "Камера по центру"
+CamCenterButton.TextSize = 12
+CamCenterButton.Parent = MainFrame
+
+local FloatButton = Instance.new("TextButton")
+FloatButton.Size = UDim2.new(0, 130, 0, 30)
+FloatButton.Position = UDim2.new(0, 15, 0, 70)
+FloatButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+FloatButton.Font = Enum.Font.Code
+FloatButton.Text = "Float"
+FloatButton.TextSize = 12
+FloatButton.Parent = MainFrame
+
+local RadiusLabel = Instance.new("TextLabel")
+RadiusLabel.Size = UDim2.new(0, 130, 0, 15)
+RadiusLabel.Position = UDim2.new(0, 15, 0, 110)
+RadiusLabel.BackgroundTransparency = 1
+RadiusLabel.Font = Enum.Font.Code
+RadiusLabel.Text = "Радиус:"
+RadiusLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+RadiusLabel.TextSize = 11
+RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+RadiusLabel.Parent = MainFrame
+
+local RadiusBox = Instance.new("TextBox")
+RadiusBox.Size = UDim2.new(0, 130, 0, 20)
+RadiusBox.Position = UDim2.new(0, 15, 0, 125)
+RadiusBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+RadiusBox.BorderSizePixel = 1
+RadiusBox.Font = Enum.Font.Code
+RadiusBox.Text = tostring(RADIUS)
+RadiusBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+RadiusBox.TextSize = 12
+RadiusBox.ClearTextOnFocus = false
+RadiusBox.Parent = MainFrame
+
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(0, 130, 0, 15)
+SpeedLabel.Position = UDim2.new(0, 155, 0, 110)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Font = Enum.Font.Code
+SpeedLabel.Text = "Скорость:"
+SpeedLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+SpeedLabel.TextSize = 11
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Parent = MainFrame
+
+local SpeedBox = Instance.new("TextBox")
+SpeedBox.Size = UDim2.new(0, 130, 0, 20)
+SpeedBox.Position = UDim2.new(0, 155, 0, 125)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+SpeedBox.BorderSizePixel = 1
+SpeedBox.Font = Enum.Font.Code
+SpeedBox.Text = tostring(SPEED)
+SpeedBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+SpeedBox.TextSize = 12
+SpeedBox.ClearTextOnFocus = false
+SpeedBox.Parent = MainFrame
+
+local FixButton = Instance.new("TextButton")
+FixButton.Size = UDim2.new(0, 280, 0, 30)
+FixButton.Position = UDim2.new(0, 15, 0, 150)
+FixButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+FixButton.Font = Enum.Font.Code
+FixButton.Text = "Не работает?"
+FixButton.TextSize = 12
+FixButton.Parent = MainFrame
+
+local ExtraFrame = Instance.new("Frame")
+ExtraFrame.Size = UDim2.new(1, 0, 0, 80)
+ExtraFrame.Position = UDim2.new(0, 0, 0, 185)
+ExtraFrame.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+ExtraFrame.BorderSizePixel = 1
+ExtraFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+ExtraFrame.Visible = false
+ExtraFrame.Parent = MainFrame
+
+local ZigzagButton = Instance.new("TextButton")
+ZigzagButton.Size = UDim2.new(0, 280, 0, 25)
+ZigzagButton.Position = UDim2.new(0, 15, 0, 5)
+ZigzagButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+ZigzagButton.Font = Enum.Font.Code
+ZigzagButton.Text = "Включить зигзаги"
+ZigzagButton.TextSize = 12
+ZigzagButton.Parent = ExtraFrame
+
+local HeightLabel = Instance.new("TextLabel")
+HeightLabel.Size = UDim2.new(0, 130, 0, 15)
+HeightLabel.Position = UDim2.new(0, 15, 0, 35)
+HeightLabel.BackgroundTransparency = 1
+HeightLabel.Font = Enum.Font.Code
+HeightLabel.Text = "Высота зигзагов:"
+HeightLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+HeightLabel.TextSize = 11
+HeightLabel.TextXAlignment = Enum.TextXAlignment.Left
+HeightLabel.Parent = ExtraFrame
+
+local HeightBox = Instance.new("TextBox")
+HeightBox.Size = UDim2.new(0, 130, 0, 20)
+HeightBox.Position = UDim2.new(0, 15, 0, 50)
+HeightBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+HeightBox.BorderSizePixel = 1
+HeightBox.Font = Enum.Font.Code
+HeightBox.Text = tostring(ZIGZAG_HEIGHT)
+HeightBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+HeightBox.TextSize = 12
+HeightBox.ClearTextOnFocus = false
+HeightBox.Parent = ExtraFrame
+
+local ZigzagSpeedLabel = Instance.new("TextLabel")
+ZigzagSpeedLabel.Size = UDim2.new(0, 130, 0, 15)
+ZigzagSpeedLabel.Position = UDim2.new(0, 155, 0, 35)
+ZigzagSpeedLabel.BackgroundTransparency = 1
+ZigzagSpeedLabel.Font = Enum.Font.Code
+ZigzagSpeedLabel.Text = "Скорость зигзагов:"
+ZigzagSpeedLabel.TextColor3 = Color3.fromRGB(0, 0, 0)
+ZigzagSpeedLabel.TextSize = 11
+ZigzagSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+ZigzagSpeedLabel.Parent = ExtraFrame
+
+local ZigzagSpeedBox = Instance.new("TextBox")
+ZigzagSpeedBox.Size = UDim2.new(0, 130, 0, 20)
+ZigzagSpeedBox.Position = UDim2.new(0, 155, 0, 50)
+ZigzagSpeedBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+ZigzagSpeedBox.BorderSizePixel = 1
+ZigzagSpeedBox.Font = Enum.Font.Code
+ZigzagSpeedBox.Text = tostring(ZIGZAG_SPEED)
+ZigzagSpeedBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+ZigzagSpeedBox.TextSize = 12
+ZigzagSpeedBox.ClearTextOnFocus = false
+ZigzagSpeedBox.Parent = ExtraFrame
+
+local MBar = Instance.new("Frame")
+MBar.Size = UDim2.new(1, -4, 0, 18)
+MBar.Position = UDim2.new(0, 2, 0, 2)
+MBar.BackgroundColor3 = Color3.fromRGB(0, 0, 128)
+MBar.BorderSizePixel = 0
+MBar.Parent = MiniFrame
+
+local MiniIcon = Instance.new("ImageLabel")
+MiniIcon.Size = UDim2.new(0, 14, 0, 14)
+MiniIcon.Position = UDim2.new(0, 4, 0, 2)
+MiniIcon.BackgroundTransparency = 1
+MiniIcon.Image = "rbxassetid://137805772937013"
+MiniIcon.Parent = MBar
+
+local MTxt = Instance.new("TextLabel")
+MTxt.Size = UDim2.new(1, -25, 1, 0)
+MTxt.Position = UDim2.new(0, 20, 0, 0)
+MTxt.BackgroundTransparency = 1
+MTxt.Font = Enum.Font.Code
+MTxt.Text = "Тisha's sex club gui"
+MTxt.TextColor3 = Color3.fromRGB(255, 255, 255)
+MTxt.TextSize = 14
+MTxt.TextXAlignment = Enum.TextXAlignment.Left
+MTxt.Parent = MBar
+
+local MaximizeButton = Instance.new("TextButton")
+MaximizeButton.Size = UDim2.new(0, 14, 0, 14)
+MaximizeButton.Position = UDim2.new(1, -16, 0, 2)
+MaximizeButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+MaximizeButton.Font = Enum.Font.Code
+MaximizeButton.Text = "▢"
+MaximizeButton.TextSize = 12
+MaximizeButton.Parent = MBar
+
+local MToggleButton = Instance.new("TextButton")
+MToggleButton.Size = UDim2.new(0, 130, 0, 30)
+MToggleButton.Position = UDim2.new(0, 15, 0, 27)
+MToggleButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+MToggleButton.Font = Enum.Font.Code
+MToggleButton.Text = "Включить"
+MToggleButton.TextSize = 12
+MToggleButton.Parent = MiniFrame
+
+local MFloatButton = Instance.new("TextButton")
+MFloatButton.Size = UDim2.new(0, 130, 0, 30)
+MFloatButton.Position = UDim2.new(0, 15, 0, 62)
+MFloatButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+MFloatButton.Font = Enum.Font.Code
+MFloatButton.Text = "Float"
+MFloatButton.TextSize = 12
+MFloatButton.Parent = MiniFrame
+
+local function updateInputs()
+    RADIUS = tonumber(RadiusBox.Text) or RADIUS
+    SPEED = tonumber(SpeedBox.Text) or SPEED
+    ZIGZAG_HEIGHT = tonumber(HeightBox.Text) or ZIGZAG_HEIGHT
+    ZIGZAG_SPEED = tonumber(ZigzagSpeedBox.Text) or ZIGZAG_SPEED
+end
+RadiusBox.FocusLost:Connect(updateInputs)
+SpeedBox.FocusLost:Connect(updateInputs)
+HeightBox.FocusLost:Connect(updateInputs)
+ZigzagSpeedBox.FocusLost:Connect(updateInputs)
+
+local function refreshBodyCache()
+    local char = player.Character
+    if not char then bodyPartsCache = nil return end
+    bodyPartsCache = {}
+    for _, partName in ipairs({"Head", "LeftArm", "LeftLeg", "RightArm", "RightLeg", "Torso"}) do
+        local part = char:FindFirstChild(partName)
+        if part then table.insert(bodyPartsCache, part) end
+    end
+end
+
+local lastTransparency = nil
+local function setBodyTransparency(value)
+    if lastTransparency == value then return end
+    lastTransparency = value
+    if not bodyPartsCache then refreshBodyCache() end
+    if bodyPartsCache then
+        for _, part in ipairs(bodyPartsCache) do
+            part.Transparency = value
+        end
+    end
+end
+
+player.CharacterAdded:Connect(function()
+    bodyPartsCache = nil
+    lastTransparency = nil
+    task.wait(1)
+    refreshBodyCache()
+end)
+
+local function createCenterBlock()
+    if centerBlock then centerBlock:Destroy() end
+    centerBlock = Instance.new("Part")
+    centerBlock.Name = "CircleCenter"
+    centerBlock.Size = Vector3.new(1, 1, 1)
+    centerBlock.Transparency = 1
+    centerBlock.CanCollide = false
+    centerBlock.Anchored = true
+    centerBlock.Parent = workspace
+    if currentCenter then centerBlock.Position = currentCenter end
+end
+
+local function createPlatform()
+    if platform then platform:Destroy() end
+    platform = Instance.new("Part")
+    platform.Name = "CirclePlatform"
+    platform.Size = Vector3.new(PLATFORM_SIZE, 1, PLATFORM_SIZE)
+    platform.Transparency = 0.5
+    platform.CanCollide = true
+    platform.Anchored = true
+    platform.Parent = workspace
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if root then
+        platform.Position = Vector3.new(root.Position.X, root.Position.Y - FOOT_OFFSET, root.Position.Z)
+    elseif currentCenter then
+        platform.Position = Vector3.new(currentCenter.X, currentCenter.Y - FOOT_OFFSET, currentCenter.Z)
+    end
+end
+
+local function createVisualClone()
+    if visualClone then visualClone:Destroy() end
+    if not player.Character then return end
+    pcall(function()
+        player.Character.Archivable = true
+        visualClone = player.Character:Clone()
+        visualClone.Name = "VisualClone"
+        visualClone.Parent = workspace
+        for _, v in pairs(visualClone:GetDescendants()) do
+            if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("Tool") then v:Destroy() end
+        end
+        for _, v in pairs(visualClone:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+                v.Anchored = true
+            end
+        end
+        local cloneHumanoid = visualClone:FindFirstChildOfClass("Humanoid")
+        if cloneHumanoid then
+            cloneHumanoid.PlatformStand = false
+        end
+    end)
+end
+
+local function loop(dt)
+    local char = player.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not (humanoid and root) then return end
+
+    if not currentCenter then
+        currentCenter = root.Position
+        createCenterBlock()
+    end
+    if (root.Position - currentCenter).Magnitude > RADIUS + 15 then
+        currentCenter = root.Position
+        if centerBlock then centerBlock.Position = currentCenter end
+    end
+    local moveDir = humanoid.MoveDirection
+    local isMoving = moveDir.Magnitude > 0
+    if isMoving then currentCenter = currentCenter + moveDir * humanoid.WalkSpeed * dt end
+    if centerBlock then centerBlock.Position = currentCenter end
+
+    if visualClone then
+        local cloneRoot = visualClone:FindFirstChild("HumanoidRootPart")
+        if cloneRoot then
+            cloneRoot.CFrame = CFrame.new(currentCenter)
+        end
+    end
+
+    angle = angle + dt * SPEED
+    local r = RADIUS <= 0 and 0.01 or RADIUS
+    local tx = currentCenter.X + math.cos(angle) * r
+    local tz = currentCenter.Z + math.sin(angle) * r
+    local ty = currentCenter.Y
+
+    if isZigzagEnabled and not isCameraCentered then
+        zigzagTime = zigzagTime + dt * ZIGZAG_SPEED
+        ty = currentCenter.Y + math.abs(math.sin(zigzagTime)) * ZIGZAG_HEIGHT
+    end
+
+    local targetPos = Vector3.new(tx, ty, tz)
+    local look = Vector3.new(currentCenter.X + math.cos(angle + 0.1) * r, ty, currentCenter.Z + math.sin(angle + 0.1) * r)
+
+    root.Velocity = Vector3.new(0, 0, 0)
+    root.CFrame = CFrame.lookAt(targetPos, look)
+
+    if isCameraCentered and isRunning then
+        camera.CameraType = Enum.CameraType.Scriptable
+        local rot = CFrame.Angles(0, math.rad(cameraRotX), 0) * CFrame.Angles(math.rad(cameraRotY), 0, 0)
+        camera.CFrame = CFrame.new(currentCenter + rot * Vector3.new(0, 5, cameraDistance), currentCenter)
+        setBodyTransparency(1)
+    else
+        setBodyTransparency(0)
+    end
+end
+
+local function partialStop()
+    isRunning = false
+    ToggleButton.Text = "Включить"
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    MToggleButton.Text = "Включить"
+    MToggleButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    if connection then connection:Disconnect() connection = nil end
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and currentCenter then
+        player.Character.HumanoidRootPart.CFrame = CFrame.new(currentCenter.X, player.Character.HumanoidRootPart.Position.Y, currentCenter.Z)
+    end
+    currentCenter = nil
+    if isCameraCentered then
+        camera.CameraType = Enum.CameraType.Custom
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            camera.CameraSubject = player.Character:FindFirstChildOfClass("Humanoid")
+        end
+        if visualClone then visualClone:Destroy() visualClone = nil end
+        pcall(function() setBodyTransparency(0) end)
+    end
+end
+
+local function fullStop()
+    partialStop()
+    if visualClone then visualClone:Destroy() visualClone = nil end
+    if centerBlock then centerBlock:Destroy() centerBlock = nil end
+    if platform then platform:Destroy() platform = nil end
+    if floatConnection then floatConnection:Disconnect() floatConnection = nil end
+    isFloatEnabled = false
+    FloatButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    MFloatButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    isCameraCentered = false
+end
+_G.StopOldCircleWalk = fullStop
+
+local function toggleCircle()
+    isRunning = not isRunning
+    if isRunning then
+        ToggleButton.Text = "Выключить"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+        MToggleButton.Text = "Выключить"
+        MToggleButton.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+        angle = 0
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            currentCenter = player.Character.HumanoidRootPart.Position
+            createCenterBlock()
+            if isCameraCentered then
+                createVisualClone()
+                if visualClone and visualClone:FindFirstChild("HumanoidRootPart") and centerBlock then
+                    visualClone.HumanoidRootPart.CFrame = CFrame.new(centerBlock.Position)
+                end
+            end
+        end
+        connection = RunService.RenderStepped:Connect(loop)
+    else
+        partialStop()
+    end
+end
+
+local function toggleFloat()
+    isFloatEnabled = not isFloatEnabled
+    if isFloatEnabled then
+        FloatButton.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+        MFloatButton.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+        createPlatform()
+        floatConnection = RunService.RenderStepped:Connect(function()
+            if platform and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local root = player.Character.HumanoidRootPart
+                platform.Position = Vector3.new(root.Position.X, root.Position.Y - FOOT_OFFSET, root.Position.Z)
+            end
+        end)
+    else
+        FloatButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+        MFloatButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+        if floatConnection then floatConnection:Disconnect() floatConnection = nil end
+        if platform then platform:Destroy() platform = nil end
+    end
+end
+
+ToggleButton.Activated:Connect(toggleCircle)
+MToggleButton.Activated:Connect(toggleCircle)
+FloatButton.Activated:Connect(toggleFloat)
+MFloatButton.Activated:Connect(toggleFloat)
+
+MinimizeButton.Activated:Connect(function()
+    MainFrame.Visible = false
+    MiniFrame.Visible = true
+    MToggleButton.Text = ToggleButton.Text
+    MToggleButton.BackgroundColor3 = ToggleButton.BackgroundColor3
+    MFloatButton.Text = FloatButton.Text
+    MFloatButton.BackgroundColor3 = FloatButton.BackgroundColor3
+end)
+
+MaximizeButton.Activated:Connect(function()
+    MainFrame.Visible = true
+    MiniFrame.Visible = false
+    ToggleButton.Text = MToggleButton.Text
+    ToggleButton.BackgroundColor3 = MToggleButton.BackgroundColor3
+    FloatButton.Text = MFloatButton.Text
+    FloatButton.BackgroundColor3 = MFloatButton.BackgroundColor3
+end)
+
+CamCenterButton.Activated:Connect(function()
+    isCameraCentered = not isCameraCentered
+    if isCameraCentered then
+        CamCenterButton.BackgroundColor3 = Color3.fromRGB(130, 170, 200)
+        if isRunning then
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                currentCenter = player.Character.HumanoidRootPart.Position
+                if centerBlock then centerBlock.Position = currentCenter end
+            end
+            createVisualClone()
+            if visualClone and visualClone:FindFirstChild("HumanoidRootPart") and centerBlock then
+                visualClone.HumanoidRootPart.CFrame = CFrame.new(centerBlock.Position)
+            end
+        end
+    else
+        CamCenterButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+        camera.CameraType = Enum.CameraType.Custom
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            camera.CameraSubject = player.Character:FindFirstChildOfClass("Humanoid")
+        end
+        if visualClone then visualClone:Destroy() visualClone = nil end
+        pcall(function() setBodyTransparency(0) end)
+    end
+end)
+
+FixButton.Activated:Connect(function()
+    isExtraSettingsOpen = not isExtraSettingsOpen
+    ExtraFrame.Visible = isExtraSettingsOpen
+    MainFrame.Size = isExtraSettingsOpen and UDim2.new(0, 310, 0, 270) or UDim2.new(0, 310, 0, 190)
+end)
+
+ZigzagButton.Activated:Connect(function()
+    isZigzagEnabled = not isZigzagEnabled
+    if isZigzagEnabled then
+        ZigzagButton.Text = "Выключить зигзаги"
+        ZigzagButton.BackgroundColor3 = Color3.fromRGB(130, 200, 130)
+        zigzagTime = 0
+    else
+        ZigzagButton.Text = "Включить зигзаги"
+        ZigzagButton.BackgroundColor3 = Color3.fromRGB(192, 192, 192)
+    end
+end)
+
+CloseButton.Activated:Connect(function()
+    fullStop()
+    Gui:Destroy()
+end)
+
+-- [FIX] на тач-устройствах RenderStepped не трогает мышь, чтобы не конфликтовать с тач-обработчиком
+RunService.RenderStepped:Connect(function()
+    if isTouchDevice then return end
+    if not isCameraCentered or not isRunning then
+        lastMousePos = UserInputService:GetMouseLocation()
+        return
+    end
+    if not isRMBHeld then
+        lastMousePos = UserInputService:GetMouseLocation()
+        return
+    end
+    local mouseLocation = UserInputService:GetMouseLocation()
+    if lastMousePos then
+        local dx = mouseLocation.X - lastMousePos.X
+        local dy = mouseLocation.Y - lastMousePos.Y
+        if dx ~= 0 or dy ~= 0 then
+            cameraRotX = cameraRotX - dx * 0.4
+            cameraRotY = math.clamp(cameraRotY - dy * 0.4, -75, 75)
+        end
+    end
+    lastMousePos = mouseLocation
+end)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isRMBHeld = true
+        lastMousePos = UserInputService:GetMouseLocation()
+    elseif input.UserInputType == Enum.UserInputType.Touch and isCameraCentered and isRunning then
+        -- [FIX] фиксируем только первый палец, остальные игнорируем
+        if not lastTouchPos then
+            lastTouchPos = input.Position
+        end
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input, processed)
+    if not isCameraCentered or not isRunning or processed then return end
+    if input.UserInputType == Enum.UserInputType.Touch then
+        if not lastTouchPos then
+            lastTouchPos = input.Position
+            return
+        end
+        local dx = input.Position.X - lastTouchPos.X
+        local dy = input.Position.Y - lastTouchPos.Y
+        -- [FIX] защита от скачка при мультитаче / смене пальца
+        if math.abs(dx) > 60 or math.abs(dy) > 60 then
+            lastTouchPos = input.Position
+            return
+        end
+        -- [FIX] сглаживание, чтобы не было резких рывков камеры
+        local smooth = 0.35
+        dx = dx * smooth
+        dy = dy * smooth
+        cameraRotX = cameraRotX - dx * 0.4
+        cameraRotY = math.clamp(cameraRotY - dy * 0.4, -75, 75)
+        lastTouchPos = input.Position
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isRMBHeld = false
+        lastMousePos = nil
+    elseif input.UserInputType == Enum.UserInputType.Touch then
+        lastTouchPos = nil
+    end
+end)
+
+print("привет друзья зовусь я геем")
+
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "ыы",
+    Text = "возможно в скрипте есть недочёты, советую использовать вместе с fly",
+    Duration = 15,
+    Button1 = "ок"
+})
