@@ -1,0 +1,3 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hfyfy2115-glitch/scripts/main/waypoints"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hfyfy2115-glitch/scripts/main/tp-to-elevator"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/hfyfy2115-glitch/scripts/main/teleport-on-gen"))()
