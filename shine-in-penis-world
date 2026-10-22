@@ -1,0 +1,162 @@
+print("WANNA TRY MY ✨ ROSE TOY✨🌹🌹🌹🌹🌹🌹🌹🌹🌹🌹🌹🌹💅💅💅💅💅💅💅💅💅💅💅?!?!?!?!?")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local PlayerGui = player:WaitForChild("PlayerGui")
+
+local oldGui = PlayerGui:FindFirstChild("SunshineSystem_Unique")
+if oldGui then oldGui:Destroy() end
+
+local events = ReplicatedStorage:FindFirstChild("Events")
+local charEvent = events and events:FindFirstChild("ChangeChar")
+local monsterEvent = events and events:FindFirstChild("ChangeMonster")
+
+local sharedData = ReplicatedStorage:FindFirstChild("SharedData")
+local towerDataPath = sharedData and sharedData:FindFirstChild("TowerData", true)
+local monsterDataPath = ReplicatedStorage:FindFirstChild("MonsterData")
+
+local isRunning = false
+local monsterMode = false
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SunshineSystem_Unique"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+local main = Instance.new("Frame", screenGui)
+main.Size = UDim2.new(0, 200, 0, 410)
+main.Position = UDim2.new(0.5, -100, 0.2, 0)
+main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+main.BorderSizePixel = 2
+main.Active = true
+main.Draggable = true
+
+local layout = Instance.new("UIListLayout", main)
+layout.Padding = UDim.new(0, 8)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local padding = Instance.new("UIPadding", main)
+padding.PaddingTop = UDim.new(0, 10)
+
+local function addInput(title, default, placeholder, order)
+ local container = Instance.new("Frame", main)
+ container.Size = UDim2.new(0.9, 0, 0, 45)
+ container.BackgroundTransparency = 1
+ container.LayoutOrder = order
+ local label = Instance.new("TextLabel", container)
+ label.Size = UDim2.new(1, 0, 0, 15)
+ label.Text = title
+ label.TextColor3 = Color3.new(1, 1, 1)
+ label.BackgroundTransparency = 1
+ label.TextSize = 12
+ label.Font = Enum.Font.SourceSansBold
+ local box = Instance.new("TextBox", container)
+ box.Size = UDim2.new(1, 0, 0, 25)
+ box.Position = UDim2.new(0, 0, 0, 18)
+ box.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+ box.Text = default
+ box.PlaceholderText = placeholder
+ box.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+ box.TextColor3 = Color3.new(1, 1, 1)
+ box.ClearTextOnFocus = false
+ return box
+end
+
+local delayBox = addInput("Cooldown", "0.05", "0.05", 1)
+local countBox = addInput("How many times", "1", "1", 2)
+local charBox = addInput("Toon", "", "R&D=RazzleDazzle", 3)
+
+local monsterToggle = Instance.new("TextButton", main)
+monsterToggle.Size = UDim2.new(0.9, 0, 0, 30)
+monsterToggle.LayoutOrder = 4
+monsterToggle.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+monsterToggle.Text = "Monster mode: OFF"
+monsterToggle.TextColor3 = Color3.new(1, 1, 1)
+monsterToggle.Font = Enum.Font.SourceSansBold
+monsterToggle.TextSize = 12
+
+local monsterLabel = Instance.new("TextLabel", main)
+monsterLabel.Size = UDim2.new(0.9, 0, 0, 10)
+monsterLabel.LayoutOrder = 5
+monsterLabel.Text = "(roleplay only)"
+monsterLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+monsterLabel.BackgroundTransparency = 1
+monsterLabel.TextSize = 10
+
+local startBtn = Instance.new("TextButton", main)
+startBtn.Size = UDim2.new(0.9, 0, 0, 40)
+startBtn.LayoutOrder = 6
+startBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+startBtn.Text = ""
+
+local labelSunshine = Instance.new("TextLabel", startBtn)
+labelSunshine.Size = UDim2.new(1, 0, 1, 0)
+labelSunshine.BackgroundTransparency = 1
+labelSunshine.TextColor3 = Color3.new(1, 1, 1)
+labelSunshine.Text = "you are my sunshine"
+labelSunshine.Font = Enum.Font.SourceSansBold
+labelSunshine.TextSize = 14
+
+local deleteBtn = Instance.new("TextButton", main)
+deleteBtn.Size = UDim2.new(0.9, 0, 0, 30)
+deleteBtn.LayoutOrder = 7
+deleteBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+deleteBtn.Text = "Delete gui"
+deleteBtn.TextColor3 = Color3.new(1, 1, 1)
+deleteBtn.TextSize = 14
+
+local footerLabel = Instance.new("TextLabel", main)
+footerLabel.Size = UDim2.new(0.9, 0, 0, 35)
+footerLabel.LayoutOrder = 8
+footerLabel.BackgroundTransparency = 1
+footerLabel.Text = "Names start with a\ncapital letter"
+footerLabel.TextColor3 = Color3.new(0.6, 0.6, 0.6)
+footerLabel.TextSize = 11
+footerLabel.TextWrapped = true
+
+monsterToggle.MouseButton1Click:Connect(function()
+ monsterMode = not monsterMode
+ monsterToggle.Text = monsterMode and "Monster mode: ON" or "Monster mode: OFF"
+ monsterToggle.BackgroundColor3 = monsterMode and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(60, 0, 0)
+end)
+
+startBtn.MouseButton1Click:Connect(function()
+ if isRunning then
+  isRunning = false
+  startBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+  return
+ end
+ isRunning = true
+ startBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+ task.spawn(function()
+  while isRunning and screenGui.Parent do
+   local cd = tonumber(delayBox.Text)
+   local reps = tonumber(countBox.Text)
+   if cd and reps and cd > 0 and reps > 0 and charBox.Text ~= "" then
+    local raw = charBox.Text
+    local clean = raw:find("=") and raw:split("=") or raw
+    if type(clean) == "table" then clean = clean[#clean] end
+    if monsterMode and monsterEvent and monsterDataPath then
+     local target = monsterDataPath:FindFirstChild(tostring(clean) .. "Monster")
+     if target then for i = 1, reps do monsterEvent:FireServer(target) end end
+    elseif charEvent and towerDataPath then
+     local target = towerDataPath:FindFirstChild(tostring(clean))
+     if target then for i = 1, reps do charEvent:FireServer(target) end end
+    end
+    task.wait(cd)
+   else
+    task.wait(0.1)
+   end
+  end
+ end)
+end)
+
+deleteBtn.MouseButton1Click:Connect(function() isRunning = false; screenGui:Destroy() end)
+
+task.delay(1, function()
+ local a = player:GetAttribute("ToonName") or player:GetAttribute("MonsterName") or (player.Character and player.Character:GetAttribute("ToonName"))
+ if a then charBox.Text = tostring(a):gsub("Monster$", "") end
+end)
