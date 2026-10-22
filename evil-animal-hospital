@@ -1,0 +1,136 @@
+local Plrs, CoreGui, UIS = game:GetService("Players"), game:GetService("CoreGui"), game:GetService("UserInputService")
+local LP = Plrs.LocalPlayer
+local Rep = game:GetService("ReplicatedStorage")
+
+-- ОЧИСТКА: Удаляем все старые версии интерфейсов
+for _, old in pairs(CoreGui:GetChildren()) do
+    if old.Name == "RouteFixGui" or old.Name == "SimpleVoidGui" or old.Name == "ServerVoidGui" or old.Name == "AutoRoutePatientsGui" then
+        old:Destroy()
+    end
+end
+
+local destroyHeight = workspace.FallenPartsDestroyHeight
+local platY = destroyHeight + 30
+
+-- Очищаем старый пол, чтобы физика не лагала
+local oldFloor = workspace:FindFirstChild("RouteFixGui")
+if oldFloor then oldFloor:Destroy() end
+
+-- 1. СОЗДАНИЕ ПЛАТФОРМЫ ПОД КАРТОЙ
+local Floor = Instance.new("Part", workspace)
+Floor.Name = "RouteFixGui" Floor.Size = Vector3.new(5000, 10, 5000) Floor.Position = Vector3.new(0, platY, 0)
+Floor.Anchored = true Floor.CanCollide = true Floor.Transparency = 0.8 Floor.Material = Enum.Material.Concrete
+
+-- 2. СОЗДАНИЕ ИНТЕРФЕЙСА С КНОПКАМИ
+local SG = Instance.new("ScreenGui", CoreGui) SG.Name = "RouteFixGui" SG.ResetOnSpawn = false
+local Frame = Instance.new("Frame", SG) Frame.Size = UDim2.new(0, 265, 0, 60) Frame.Position = UDim2.new(0.5, -132, 0.75, 0) Frame.BackgroundTransparency = 1 Frame.Active = true
+
+local function createBtn(text, size, pos, color, bColor)
+    local btn = Instance.new("TextButton", Frame) btn.Size = size btn.Position = pos btn.BackgroundColor3 = color
+    btn.TextColor3 = Color3.new(1,1,1) btn.TextSize = 13 btn.Font = Enum.Font.SourceSansBold btn.Text = text
+    btn.BorderSizePixel = 2 btn.BorderColor3 = bColor btn.ZIndex = 10
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    return btn
+end
+
+local BtnRoute = createBtn("AUTO ROUTE PATIENTS", UDim2.new(0, 170, 0, 50), UDim2.new(0, 5, 0, 5), Color3.fromRGB(15, 30, 45), Color3.fromRGB(0, 150, 255))
+local BtnFix = createBtn("FIX", UDim2.new(0, 80, 0, 50), UDim2.new(0, 180, 0, 5), Color3.fromRGB(25, 45, 25), Color3.fromRGB(0, 210, 100))
+
+-- 3. ПЕРЕТАСКИВАНИЕ (Drag-and-Drop)
+local dragStart, startPos, dragging, isMoving = nil, nil, false, false
+local function handleDrag(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging, isMoving, dragStart, startPos = true, false, input.Position, Frame.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    end
+end
+BtnRoute.InputBegan:Connect(handleDrag) BtnFix.InputBegan:Connect(handleDrag)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        if delta.Magnitude > 7 then isMoving = true end
+        Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- 4. ЛОГИКА СБРОСА PATIENTS
+BtnRoute.MouseButton1Click:Connect(function()
+    if isMoving or not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") or not workspace:FindFirstChild("NPCs") then return end
+    local myPos = LP.Character.HumanoidRootPart.Position
+    local closest, shortest = nil, math.huge
+    
+    -- БЕЗОПАСНЫЙ ПРОБИВ РАДИУСА: Принудительно заставляем клиент симулировать физику объектов на любом расстоянии
+    if LP.MaximumSimulationRadius then
+        LP.MaximumSimulationRadius = math.huge
+        LP.SimulationRadius = 99999
+    end
+    settings().Physics.AllowSleep = false
+    
+    for _, npc in pairs(workspace.NPCs:GetChildren()) do
+        local r = npc:FindFirstChild("HumanoidRootPart") or npc.PrimaryPart
+        if r and r.Position.Y > (platY + 20) and not r.Anchored then
+            local dist = (myPos - r.Position).Magnitude
+            if dist < shortest then closest, shortest = npc, dist end
+        end
+    end
+    
+    if closest then
+        local r = closest:FindFirstChild("HumanoidRootPart") or closest.PrimaryPart
+        local hum = closest:FindFirstChildOfClass("Humanoid")
+        BtnRoute.Text = "SENDING..."
+        
+        local cf, vec = CFrame.new(r.Position.X, platY + 4, r.Position.Z), Vector3.new(r.Position.X, platY + 4, r.Position.Z)
+        
+        for _, obj in pairs(Rep:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                local n = string.lower(obj.Name)
+                if string.find(n, "route") or string.find(n, "bed") or string.find(n, "room") or string.find(n, "seat") then
+                    obj:FireServer(closest, cf) obj:FireServer("Route", closest, vec)
+                elseif string.find(n, "hit") or string.find(n, "kill") then
+                    obj:FireServer(closest)
+                end
+            end
+        end
+        
+        if hum then hum.PlatformStand = true end
+        
+        -- Пошаговая фиксация импульса, чтобы сервер точно за реплицировал падение объекта из нашего бесконечного радиуса
+        for i = 1, 5 do 
+            if r then 
+                r.CFrame = cf 
+                r.AssemblyLinearVelocity = Vector3.new(0, -400, 0)
+                task.wait(0.01) 
+            end 
+        end
+        
+        BtnRoute.Text = "AUTO ROUTE PATIENTS"
+    else
+        BtnRoute.Text = "NO TARGETS" task.wait(0.5) BtnRoute.Text = "AUTO ROUTE PATIENTS"
+    end
+end)
+
+-- 5. ЛОГИКА FIX
+BtnFix.MouseButton1Click:Connect(function()
+    if isMoving or not workspace:FindFirstChild("NPCs") then return end
+    BtnFix.Text = "FIXING..."
+    local count = 0
+    
+    for _, desc in pairs(workspace.NPCs:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") then
+            local d, h = desc.MaxActivationDistance, desc.HoldDuration
+            desc.MaxActivationDistance, desc.HoldDuration = 99999, 0
+            
+            if fireproximityprompt then 
+                fireproximityprompt(desc) 
+            else 
+                desc:InputHoldBegan() task.wait(0.02) desc:InputHoldEnd() 
+            end
+            
+            desc.MaxActivationDistance, desc.HoldDuration = d, h
+            count = count + 1
+        end
+    end
+    BtnFix.Text = count > 0 and "DONE ("..tostring(count)..")" or "NO PROMPTS"
+    task.wait(0.6) BtnFix.Text = "FIX"
+end)
