@@ -1,3 +1,48 @@
+_G.RealClickerActive = true
+
+local Players = game:GetService("Players")
+local vim = game:GetService("VirtualInputManager")
+local runService = game:GetService("RunService")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+local moveEvent = vim.SendMouseMoveEvent
+local clickEvent = vim.SendMouseButtonEvent
+local random = math.random
+local taskWait = task.wait
+local renderWait = runService.RenderStepped.Wait
+local renderStepped = runService.RenderStepped
+
+task.spawn(function()
+    while _G.RealClickerActive do
+        local brushaAbilityUI = playerGui:FindFirstChild("BrushaAbilityUI")
+        local canvas = brushaAbilityUI and brushaAbilityUI:FindFirstChild("BrushaCanvas")
+        
+        if canvas and canvas.Visible and canvas.AbsoluteSize.X > 0 then
+            local pos = canvas.AbsolutePosition
+            local size = canvas.AbsoluteSize
+            local startX = pos.X + (size.X / 2)
+            local startY = pos.Y + (size.Y / 2)
+            
+            clickEvent(vim, startX, startY, 0, true, game, 1)
+            taskWait(0.01)
+            
+            while _G.RealClickerActive and canvas and canvas.Parent and canvas.Visible do
+                for i = 1, 40 do
+                    local randomX = pos.X + random(10, size.X - 10)
+                    local randomY = pos.Y + random(10, size.Y - 10)
+                    moveEvent(vim, randomX, randomY, game)
+                end
+                renderWait(renderStepped)
+            end
+            
+            clickEvent(vim, startX, startY, 0, false, game, 1)
+        end
+        taskWait(0.1)
+    end
+end)
+
 local Workspace = game:GetService("Workspace")
 
 task.spawn(function()
