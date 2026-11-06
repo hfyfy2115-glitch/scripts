@@ -238,27 +238,18 @@ titleBar.InputEnded:Connect(function(input)
     end
 end)
 
+-- Квадратная кнопка без UICorner и без UIPadding
 local floatBtn = Instance.new("ImageButton")
 floatBtn.Size = UDim2.new(0, 80, 0, 80)
 floatBtn.Position = UDim2.new(0, 20, 0, 100)
 floatBtn.BackgroundColor3 = Color3.fromRGB(0, 84, 227)
-floatBtn.BorderSizePixel = 0
+floatBtn.BorderSizePixel = 2
+floatBtn.BorderColor3 = Color3.fromRGB(0, 60, 160)
 floatBtn.Image = ICON
 floatBtn.ScaleType = Enum.ScaleType.Fit
 floatBtn.AutoButtonColor = false
 floatBtn.Visible = false
 floatBtn.Parent = screen
-
-local floatCorner = Instance.new("UICorner")
-floatCorner.CornerRadius = UDim.new(1, 0)
-floatCorner.Parent = floatBtn
-
-local floatPadding = Instance.new("UIPadding")
-floatPadding.PaddingTop = UDim.new(0, 10)
-floatPadding.PaddingBottom = UDim.new(0, 10)
-floatPadding.PaddingLeft = UDim.new(0, 10)
-floatPadding.PaddingRight = UDim.new(0, 10)
-floatPadding.Parent = floatBtn
 
 local fDragging, fDragStart, fDragStartPos, fMoved, fPressTime
 floatBtn.InputBegan:Connect(function(input)
