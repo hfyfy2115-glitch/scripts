@@ -1,0 +1,516 @@
+-- ok
+getgenv().ShowTwistedRadii = false
+if getgenv().XP_RadiiCleanup then
+    pcall(getgenv().XP_RadiiCleanup)
+end
+task.wait(0.1)
+getgenv().ShowTwistedRadii = true
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+if not getgenv().RadiiSettings then
+    getgenv().RadiiSettings = {
+        Vision = true,
+        Sight = true,
+        Hit = true,
+        Transparency = 0.50,
+        Sphere = false
+    }
+end
+local Settings = getgenv().RadiiSettings
+if Settings.Transparency == nil then Settings.Transparency = 0.50 end
+if Settings.Sphere == nil then Settings.Sphere = false end
+
+local RADIUS_BONUS = 2
+local FALLBACK_SCAN_INTERVAL = 30
+
+local NO_BONUS_MONSTERS = {
+    RazzleDazzleMonster = true,
+    RodgerMonster = true,
+    ConnieMonster = true,
+    BlottMonster = true,
+    SquirmMonster = true
+}
+
+local monsterStats = {}
+local activeVisuals = {}
+
+local dataFolder = ReplicatedStorage:FindFirstChild("MonsterData")
+if dataFolder then
+    for _, module in ipairs(dataFolder:GetChildren()) do
+        if module:IsA("ModuleScript") then
+            local success, data = pcall(require, module)
+            if success and type(data) == "table" then
+                local name = module.Name
+                if name == "GourdyMonster" then
+                    monsterStats[name] = {
+                        vision = 100,
+                        instant = 35,
+                        kill = 4
+                    }
+                else
+                    local bonus = NO_BONUS_MONSTERS[name] and 0 or RADIUS_BONUS
+                    monsterStats[name] = {
+                        vision = (data.VisionRadius or 55) + bonus,
+                        instant = (data.InstantRadius or 26) + bonus,
+                        kill = (data.KillRadius or 3.33) + bonus
+                    }
+                end
+            end
+        end
+    end
+end
+
+local folder = workspace:FindFirstChild("TwistedRadius")
+if not folder then
+    folder = Instance.new("Folder")
+    folder.Name = "TwistedRadius"
+    folder.Parent = workspace
+end
+
+local function createDisc(color, material, radius, modelName, tag)
+    local p = Instance.new("Part")
+    p.Name = tag .. "_" .. modelName
+    p.Color = color
+    p.Material = material
+    p.Transparency = 1
+    p.Anchored = true
+    p.CanCollide = false
+    p.CanTouch = false
+    p.CanQuery = false
+    p.CastShadow = false
+    p.Shape = Enum.PartType.Cylinder
+    p.Size = Vector3.new(0.2, radius * 2, radius * 2)
+    p.Parent = folder
+    return p
+end
+
+local function createSphere(color, material, radius, modelName, tag)
+    local p = Instance.new("Part")
+    p.Name = tag .. "_" .. modelName
+    p.Color = color
+    p.Material = material
+    p.Transparency = 1
+    p.Anchored = true
+    p.CanCollide = false
+    p.CanTouch = false
+    p.CanQuery = false
+    p.CastShadow = false
+    p.Shape = Enum.PartType.Ball
+    p.Size = Vector3.new(radius * 2, radius * 2, radius * 2)
+    p.Parent = folder
+    return p
+end
+
+local function createVisualsFor(model, stats)
+    local v, s, h
+    if Settings.Sphere then
+        v = createSphere(Color3.fromRGB(0, 150, 255), Enum.Material.SmoothPlastic, stats.vision, model.Name, "Vision")
+        s = createSphere(Color3.fromRGB(255, 100, 0), Enum.Material.SmoothPlastic, stats.instant, model.Name, "Sight")
+        h = createSphere(Color3.fromRGB(255, 0, 0), Enum.Material.Neon, stats.kill, model.Name, "Hit")
+    else
+        v = createDisc(Color3.fromRGB(0, 150, 255), Enum.Material.SmoothPlastic, stats.vision, model.Name, "Vision")
+        s = createDisc(Color3.fromRGB(255, 100, 0), Enum.Material.SmoothPlastic, stats.instant, model.Name, "Sight")
+        h = createDisc(Color3.fromRGB(255, 0, 0), Enum.Material.Neon, stats.kill, model.Name, "Hit")
+    end
+    return {
+        vision = v,
+        sight = s,
+        hit = h,
+        stats = stats
+    }
+end
+
+local function destroyVisualsFor(vis)
+    if not vis then return end
+    if vis.vision then vis.vision:Destroy() end
+    if vis.sight then vis.sight:Destroy() end
+    if vis.hit then vis.hit:Destroy() end
+end
+
+local function fullScan()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and not activeVisuals[obj] then
+            local stats = monsterStats[obj.Name]
+            if stats then
+                activeVisuals[obj] = createVisualsFor(obj, stats)
+            end
+        end
+    end
+    for model, vis in pairs(activeVisuals) do
+        if not model.Parent then
+            destroyVisualsFor(vis)
+            activeVisuals[model] = nil
+        end
+    end
+end
+
+local ICON = "rbxassetid://78043428789711"
+
+local oldGui = player.PlayerGui:FindFirstChild("XP_RadiiControl")
+if oldGui then oldGui:Destroy() end
+
+local screen = Instance.new("ScreenGui")
+screen.Name = "XP_RadiiControl"
+screen.ResetOnSpawn = false
+screen.IgnoreGuiInset = true
+screen.Parent = player.PlayerGui
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 340, 0, 268)
+main.Position = UDim2.new(0.5, -170, 0.5, -134)
+main.BackgroundColor3 = Color3.fromRGB(236, 233, 216)
+main.BorderSizePixel = 1
+main.BorderColor3 = Color3.fromRGB(0, 60, 160)
+main.Active = true
+main.Parent = screen
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, -4, 0, 28)
+titleBar.Position = UDim2.new(0, 2, 0, 2)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 84, 227)
+titleBar.BorderSizePixel = 0
+titleBar.Active = true
+titleBar.Parent = main
+
+local titleIcon = Instance.new("ImageLabel")
+titleIcon.Size = UDim2.new(0, 22, 0, 22)
+titleIcon.Position = UDim2.new(0, 4, 0, 3)
+titleIcon.BackgroundTransparency = 1
+titleIcon.Image = ICON
+titleIcon.ScaleType = Enum.ScaleType.Fit
+titleIcon.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -100, 1, 0)
+titleText.Position = UDim2.new(0, 30, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Evil Tisha's sex club gui"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.Font = Enum.Font.SourceSansBold
+titleText.TextSize = 15
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.TextTruncate = Enum.TextTruncate.AtEnd
+titleText.Parent = titleBar
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 20, 0, 20)
+minBtn.Position = UDim2.new(1, -48, 0, 4)
+minBtn.BackgroundColor3 = Color3.fromRGB(240, 200, 40)
+minBtn.Text = "_"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.Font = Enum.Font.SourceSansBold
+minBtn.TextSize = 16
+minBtn.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 20, 0, 20)
+closeBtn.Position = UDim2.new(1, -24, 0, 4)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 13
+closeBtn.Parent = titleBar
+
+local dragging, dragStart, dragStartPos
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        dragStartPos = main.Position
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X, dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y)
+    end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+local floatBtn = Instance.new("ImageButton")
+floatBtn.Size = UDim2.new(0, 80, 0, 80)
+floatBtn.Position = UDim2.new(0, 20, 0, 100)
+floatBtn.BackgroundColor3 = Color3.fromRGB(0, 84, 227)
+floatBtn.BorderSizePixel = 0
+floatBtn.Image = ICON
+floatBtn.ScaleType = Enum.ScaleType.Fit
+floatBtn.AutoButtonColor = false
+floatBtn.Visible = false
+floatBtn.Parent = screen
+
+local floatCorner = Instance.new("UICorner")
+floatCorner.CornerRadius = UDim.new(1, 0)
+floatCorner.Parent = floatBtn
+
+local floatPadding = Instance.new("UIPadding")
+floatPadding.PaddingTop = UDim.new(0, 10)
+floatPadding.PaddingBottom = UDim.new(0, 10)
+floatPadding.PaddingLeft = UDim.new(0, 10)
+floatPadding.PaddingRight = UDim.new(0, 10)
+floatPadding.Parent = floatBtn
+
+local fDragging, fDragStart, fDragStartPos, fMoved, fPressTime
+floatBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        fDragging = true
+        fMoved = false
+        fDragStart = input.Position
+        fDragStartPos = floatBtn.Position
+        fPressTime = tick()
+    end
+end)
+
+floatBtn.InputChanged:Connect(function(input)
+    if fDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - fDragStart
+        if delta.Magnitude > 10 then
+            fMoved = true
+        end
+        if fMoved then
+            floatBtn.Position = UDim2.new(fDragStartPos.X.Scale, fDragStartPos.X.Offset + delta.X, fDragStartPos.Y.Scale, fDragStartPos.Y.Offset + delta.Y)
+        end
+    end
+end)
+
+floatBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if fDragging and not fMoved and (tick() - fPressTime) < 0.6 then
+            main.Visible = true
+            floatBtn.Visible = false
+        end
+        fDragging = false
+    end
+end)
+
+minBtn.MouseButton1Click:Connect(function()
+    main.Visible = false
+    floatBtn.Visible = true
+end)
+
+local function createToggle(yPos)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 320, 0, 32)
+    btn.Position = UDim2.new(0, 10, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    btn.BorderSizePixel = 1
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 15
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.Parent = main
+    local padding = Instance.new("UIPadding", btn)
+    padding.PaddingLeft = UDim.new(0, 12)
+    return btn
+end
+
+local visionBtn = createToggle(38)
+local sightBtn = createToggle(76)
+local hitBtn = createToggle(114)
+
+local function updateToggles()
+    visionBtn.Text = "Vision (Blue): " .. (Settings.Vision and "[ ON ]" or "[ OFF ]")
+    visionBtn.TextColor3 = Settings.Vision and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    sightBtn.Text = "Sight (Orange): " .. (Settings.Sight and "[ ON ]" or "[ OFF ]")
+    sightBtn.TextColor3 = Settings.Sight and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    hitBtn.Text = "Hit (Red): " .. (Settings.Hit and "[ ON ]" or "[ OFF ]")
+    hitBtn.TextColor3 = Settings.Hit and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+end
+
+visionBtn.MouseButton1Click:Connect(function() Settings.Vision = not Settings.Vision updateToggles() end)
+sightBtn.MouseButton1Click:Connect(function() Settings.Sight = not Settings.Sight updateToggles() end)
+hitBtn.MouseButton1Click:Connect(function() Settings.Hit = not Settings.Hit updateToggles() end)
+updateToggles()
+
+local transLabel = Instance.new("TextLabel")
+transLabel.Size = UDim2.new(0, 170, 0, 24)
+transLabel.Position = UDim2.new(0, 12, 0, 158)
+transLabel.BackgroundTransparency = 1
+transLabel.Text = "Transparency (0-1):"
+transLabel.Font = Enum.Font.SourceSans
+transLabel.TextSize = 15
+transLabel.TextXAlignment = Enum.TextXAlignment.Left
+transLabel.Parent = main
+
+local transBox = Instance.new("TextBox")
+transBox.Size = UDim2.new(0, 140, 0, 26)
+transBox.Position = UDim2.new(0, 190, 0, 157)
+transBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+transBox.BorderSizePixel = 1
+transBox.Text = tostring(Settings.Transparency)
+transBox.Font = Enum.Font.SourceSans
+transBox.TextSize = 15
+transBox.Parent = main
+
+local lastValidText = tostring(Settings.Transparency)
+transBox.FocusLost:Connect(function()
+    local text = transBox.Text
+    local num = tonumber(text)
+    if num and num >= 0 and num <= 1 and num == num then
+        lastValidText = text
+        Settings.Transparency = num
+    else
+        transBox.Text = lastValidText
+    end
+end)
+
+local shapeBtn = Instance.new("TextButton")
+shapeBtn.Size = UDim2.new(0, 140, 0, 26)
+shapeBtn.Position = UDim2.new(0, 190, 0, 192)
+shapeBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+shapeBtn.BorderSizePixel = 1
+shapeBtn.Font = Enum.Font.SourceSansBold
+shapeBtn.TextSize = 15
+shapeBtn.TextColor3 = Color3.fromRGB(0, 84, 227)
+shapeBtn.Parent = main
+
+local function updateShapeBtn()
+    shapeBtn.Text = Settings.Sphere and "Sphere" or "Flat"
+end
+
+shapeBtn.MouseButton1Click:Connect(function()
+    Settings.Sphere = not Settings.Sphere
+    updateShapeBtn()
+    for model, vis in pairs(activeVisuals) do
+        local stats = vis.stats
+        destroyVisualsFor(vis)
+        activeVisuals[model] = createVisualsFor(model, stats)
+    end
+end)
+updateShapeBtn()
+
+local turnOffBtn = Instance.new("TextButton")
+turnOffBtn.Size = UDim2.new(0, 320, 0, 28)
+turnOffBtn.Position = UDim2.new(0, 10, 0, 228)
+turnOffBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+turnOffBtn.BorderSizePixel = 1
+turnOffBtn.Font = Enum.Font.SourceSansBold
+turnOffBtn.TextSize = 14
+turnOffBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+turnOffBtn.Text = "Turn all off"
+turnOffBtn.Parent = main
+
+turnOffBtn.MouseButton1Click:Connect(function()
+    Settings.Vision = false
+    Settings.Sight = false
+    Settings.Hit = false
+    updateToggles()
+end)
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local heartbeatConn
+heartbeatConn = RunService.Heartbeat:Connect(function()
+    if not getgenv().ShowTwistedRadii then return end
+    local sphereMode = Settings.Sphere
+    local tr = Settings.Transparency
+    local vTr = Settings.Vision and tr or 1
+    local sTr = Settings.Sight and tr or 1
+    local hTr = Settings.Hit and tr or 1
+
+    for model, vis in pairs(activeVisuals) do
+        if model.Parent then
+            local hrp = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+            if hrp then
+                local center = hrp.Position
+
+                local exclude = {folder, model}
+                if player.Character then table.insert(exclude, player.Character) end
+                rayParams.FilterDescendantsInstances = exclude
+                local hit = workspace:Raycast(center, Vector3.new(0, -15, 0), rayParams)
+                local groundY = hit and (hit.Position.Y + 0.15) or (center.Y - 2.9)
+
+                if sphereMode then
+                    vis.vision.CFrame = CFrame.new(center)
+                    if vis.vision.Transparency ~= vTr then vis.vision.Transparency = vTr end
+                    
+                    vis.sight.CFrame = CFrame.new(center)
+                    if vis.sight.Transparency ~= sTr then vis.sight.Transparency = sTr end
+                    
+                    vis.hit.CFrame = CFrame.new(center)
+                    if vis.hit.Transparency ~= hTr then vis.hit.Transparency = hTr end
+                else
+                    local targetPos = Vector3.new(center.X, groundY, center.Z)
+                    
+                    vis.vision.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, 0, math.rad(90))
+                    if vis.vision.Transparency ~= vTr then vis.vision.Transparency = vTr end
+
+                    vis.sight.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, 0, math.rad(90))
+                    if vis.sight.Transparency ~= sTr then vis.sight.Transparency = sTr end
+                    
+                    vis.hit.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, 0, math.rad(90))
+                    if vis.hit.Transparency ~= hTr then vis.hit.Transparency = hTr end
+                end
+            end
+        end
+    end
+end)
+
+fullScan()
+
+local descendantAddedConn
+descendantAddedConn = workspace.DescendantAdded:Connect(function(obj)
+    if not getgenv().ShowTwistedRadii then return end
+    if obj:IsA("Model") and not activeVisuals[obj] then
+        local stats = monsterStats[obj.Name]
+        if stats then
+            activeVisuals[obj] = createVisualsFor(obj, stats)
+        end
+    end
+end)
+
+local descendantRemovedConn
+descendantRemovedConn = workspace.DescendantRemoving:Connect(function(obj)
+    local vis = activeVisuals[obj]
+    if vis then
+        destroyVisualsFor(vis)
+        activeVisuals[obj] = nil
+    end
+end)
+
+local scanThread = task.spawn(function()
+    while getgenv().ShowTwistedRadii do
+        task.wait(FALLBACK_SCAN_INTERVAL)
+        if not folder or not folder.Parent then
+            folder = Instance.new("Folder")
+            folder.Name = "TwistedRadius"
+            folder.Parent = workspace
+            for _, vis in pairs(activeVisuals) do
+                destroyVisualsFor(vis)
+            end
+            activeVisuals = {}
+        end
+        fullScan()
+    end
+end)
+
+getgenv().XP_RadiiCleanup = function()
+    getgenv().ShowTwistedRadii = false
+    if heartbeatConn then heartbeatConn:Disconnect() end
+    if descendantAddedConn then descendantAddedConn:Disconnect() end
+    if descendantRemovedConn then descendantRemovedConn:Disconnect() end
+    if scanThread then pcall(function() task.cancel(scanThread) end) end
+    for _, vis in pairs(activeVisuals) do
+        destroyVisualsFor(vis)
+    end
+    activeVisuals = {}
+    local f = workspace:FindFirstChild("TwistedRadius")
+    if f then f:Destroy() end
+    if screen then screen:Destroy() end
+end
+
+closeBtn.MouseButton1Click:Connect(function()
+    if getgenv().XP_RadiiCleanup then
+        pcall(getgenv().XP_RadiiCleanup)
+    end
+end)
