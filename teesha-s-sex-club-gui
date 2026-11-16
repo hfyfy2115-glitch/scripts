@@ -1,13 +1,18 @@
+-- ==========================================
+-- 1. БЕЗОПАСНАЯ ОЧИСТКА (Для Delta)
+-- ==========================================
+local player = game.Players.LocalPlayer
 local pg = player:FindFirstChild("PlayerGui")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
-if getgenv().TeeshaCleanup then pcall(getgenv().TeeshaCleanup) end
-if getgenv().TeeshaLoops then
-    for _, conn in pairs(getgenv().TeeshaLoops) do pcall(function() conn:Disconnect() end) end
+if _G.TeeshaCleanup then pcall(_G.TeeshaCleanup) end
+if _G.TeeshaLoops then
+    for _, conn in pairs(_G.TeeshaLoops) do pcall(function() conn:Disconnect() end) end
 end
+_G.TeeshaLoops = {}
 
 for _, gui in ipairs(pg:GetChildren()) do
     if gui.Name == "TeeshaGui" or gui.Name:find("Teesha") or gui.Name == "MonsterControlGui" then gui:Destroy() end
@@ -2178,3 +2183,7 @@ getgenv().TeeshaCleanup = function()
     Lighting.OutdoorAmbient = defaultLighting.OutdoorAmbient
     screen:Destroy()
 end
+
+closeBtn.MouseButton1Click:Connect(function()
+    if _G.TeeshaCleanup then pcall(_G.TeeshaCleanup) end
+end)
