@@ -1,0 +1,2185 @@
+--
+-- ==========================================
+-- 1. ПОЛНАЯ ОЧИСТКА СТАРОГО СКРИПТА
+-- ==========================================
+local player = game.Players.LocalPlayer
+local pg = player:FindFirstChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+
+if getgenv().TeeshaCleanup then pcall(getgenv().TeeshaCleanup) end
+if getgenv().TeeshaLoops then
+    for _, conn in pairs(getgenv().TeeshaLoops) do pcall(function() conn:Disconnect() end) end
+end
+
+for _, gui in ipairs(pg:GetChildren()) do
+    if gui.Name == "TeeshaGui" or gui.Name:find("Teesha") or gui.Name == "MonsterControlGui" then gui:Destroy() end
+end
+
+local floor = workspace:FindFirstChild("CurrentFloor")
+if floor then
+    for _, obj in ipairs(floor:GetDescendants()) do
+        if obj.Name == "ESP_Highlight" or obj.Name == "ESP_Billboard" then obj:Destroy() end
+    end
+end
+for _, obj in ipairs(workspace:GetDescendants()) do
+    if obj.Name == "ESP_Highlight" or obj.Name == "ESP_Billboard" or obj.Name == "TeeshaFlyBV" or obj.Name == "TeeshaFlyAlign" or obj.Name == "TeeshaFlyGyro" or obj.Name == "TeeshaGodField" then obj:Destroy() end
+end
+
+Lighting.Brightness = 2
+Lighting.FogEnd = 100000
+Lighting.GlobalShadows = true
+Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+
+getgenv().TeeshaLoops = {}
+getgenv().TeeshaInfiniteJump = false
+getgenv().TeeshaEnableJumpThread = nil
+getgenv().TeeshaFlyActive = false
+getgenv().TeeshaNoclipActive = false
+getgenv().TeeshaAntiLagCache = {}
+local defaultLighting = {
+    ClockTime = Lighting.ClockTime,
+    Brightness = Lighting.Brightness,
+    FogEnd = Lighting.FogEnd,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    GlobalShadows = Lighting.GlobalShadows
+}
+
+-- ==========================================
+-- 2. ОСНОВНЫЕ ПЕРЕМЕННЫЕ И GUI
+-- ==========================================
+local ICON = "rbxassetid://72609191454774"
+local Features = {}
+local bindingFeature = nil
+local isExtractActive, isEspMonstersActive, isEspGeneratorsActive = false, false, false
+local isGodActive = false
+local godHealthConn = nil
+local isHeavierActive = false
+local isLoopSpeedActive = false
+local heavierConn = nil
+local isAntiVoidActive = false
+local isAntiVoidRising = false
+
+local LOBBY_PLACE_ID = 14102667131
+
+local screen = Instance.new("ScreenGui")
+screen.Name = "TeeshaGui"
+screen.ResetOnSpawn = false
+screen.IgnoreGuiInset = true
+screen.Parent = pg
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 600, 0, 450)
+main.Position = UDim2.new(0.5, -300, 0.5, -225)
+main.BackgroundColor3 = Color3.fromRGB(236, 233, 216)
+main.BorderSizePixel = 2
+main.BorderColor3 = Color3.fromRGB(0, 60, 160)
+main.Active = true
+main.ClipsDescendants = true
+main.Parent = screen
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, -6, 0, 44)
+titleBar.Position = UDim2.new(0, 3, 0, 3)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 84, 227)
+titleBar.BorderSizePixel = 0
+titleBar.Active = true
+titleBar.Parent = main
+
+local titleIcon = Instance.new("ImageLabel")
+titleIcon.Size = UDim2.new(0, 36, 0, 36)
+titleIcon.Position = UDim2.new(0, 6, 0, 4)
+titleIcon.BackgroundTransparency = 1
+titleIcon.Image = ICON
+titleIcon.ScaleType = Enum.ScaleType.Fit
+titleIcon.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -120, 1, 0)
+titleText.Position = UDim2.new(0, 46, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Teesha' sex club gui"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.Font = Enum.Font.SourceSansBold
+titleText.TextSize = 20
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 30, 0, 30)
+closeBtn.Position = UDim2.new(1, -35, 0, 7)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 20
+closeBtn.Parent = titleBar
+
+local leftPanel = Instance.new("ScrollingFrame")
+leftPanel.Size = UDim2.new(0, 190, 1, -60)
+leftPanel.Position = UDim2.new(0, 10, 0, 50)
+leftPanel.BackgroundTransparency = 1
+leftPanel.ScrollBarThickness = 4
+leftPanel.AutomaticCanvasSize = Enum.AutomaticSize.Y
+leftPanel.Parent = main
+
+local leftPadding = Instance.new("UIPadding")
+leftPadding.PaddingTop = UDim.new(0, 5)
+leftPadding.PaddingRight = UDim.new(0, 5)
+leftPadding.Parent = leftPanel
+
+local leftLayout = Instance.new("UIListLayout")
+leftLayout.Padding = UDim.new(0, 8)
+leftLayout.Parent = leftPanel
+
+local rightPanel = Instance.new("Frame")
+rightPanel.Size = UDim2.new(1, -215, 1, -60)
+rightPanel.Position = UDim2.new(0, 205, 0, 50)
+rightPanel.BackgroundColor3 = Color3.fromRGB(25, 28, 35)
+rightPanel.BorderSizePixel = 2
+rightPanel.BorderColor3 = Color3.fromRGB(0, 60, 160)
+rightPanel.ClipsDescendants = true
+rightPanel.Parent = main
+
+local rightPadding = Instance.new("UIPadding")
+rightPadding.PaddingTop = UDim.new(0, 15)
+rightPadding.PaddingBottom = UDim.new(0, 15)
+rightPadding.PaddingLeft = UDim.new(0, 15)
+rightPadding.PaddingRight = UDim.new(0, 15)
+rightPadding.Parent = rightPanel
+
+local function createMenuContainer()
+    local frame = Instance.new("ScrollingFrame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    frame.ScrollBarThickness = 4
+    frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    frame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    frame.Visible = false
+    frame.Parent = rightPanel
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 15)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = frame
+    return frame
+end
+
+local mainMenu = createMenuContainer()
+local visualMenu = createMenuContainer()
+local teleportMenu = createMenuContainer()
+local autoMenu = createMenuContainer()
+local funMenu = createMenuContainer()
+local testMenu = createMenuContainer()
+
+-- ==========================================
+-- 3. УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ ТУМБЛЕРОВ
+-- ==========================================
+local function createFeatureToggle(id, title, desc, order, onToggleCallback, parentMenu, hasInput, defaultInput, isAction)
+    local feature = { id = id, isOn = false, key = nil, miniBtn = nil, ui = {}, isAction = isAction }
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, hasInput and 110 or 90)
+    frame.BackgroundColor3 = Color3.fromRGB(35, 45, 70)
+    frame.BorderSizePixel = 0
+    frame.LayoutOrder = order
+    frame.Parent = parentMenu
+
+    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 8); corner.Parent = frame
+
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(0.6, 0, 0, 20)
+    text.Position = UDim2.new(0, 15, 0, 10)
+    text.BackgroundTransparency = 1
+    text.Text = title
+    text.TextColor3 = Color3.fromRGB(255, 255, 255)
+    text.Font = Enum.Font.SourceSansBold
+    text.TextSize = 16
+    text.TextXAlignment = Enum.TextXAlignment.Left
+    text.Parent = frame
+
+    local sub = Instance.new("TextLabel")
+    sub.Size = UDim2.new(1, -80, 0, 20)
+    sub.Position = UDim2.new(0, 15, 0, 30)
+    sub.BackgroundTransparency = 1
+    sub.Text = desc
+    sub.TextColor3 = Color3.fromRGB(150, 160, 180)
+    sub.Font = Enum.Font.SourceSans
+    sub.TextSize = 12
+    sub.TextXAlignment = Enum.TextXAlignment.Left
+    sub.Parent = frame
+
+    local textBox = nil
+    if hasInput then
+        textBox = Instance.new("TextBox")
+        textBox.Size = UDim2.new(0, 60, 0, 24)
+        textBox.Position = UDim2.new(1, -125, 0, 10)
+        textBox.BackgroundColor3 = Color3.fromRGB(20, 25, 35)
+        textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textBox.Font = Enum.Font.SourceSansBold
+        textBox.TextSize = 14
+        textBox.Text = tostring(defaultInput or "16")
+        textBox.Parent = frame
+        local tCorner = Instance.new("UICorner"); tCorner.CornerRadius = UDim.new(0, 4); tCorner.Parent = textBox
+    end
+
+    local toggleBtn = nil
+    local circle = nil
+    if not isAction then
+        toggleBtn = Instance.new("TextButton")
+        toggleBtn.Size = UDim2.new(0, 46, 0, 24)
+        toggleBtn.Position = UDim2.new(1, -60, 0, 10)
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        toggleBtn.Text = ""
+        toggleBtn.AutoButtonColor = false
+        toggleBtn.Parent = frame
+        
+        local bgCorner = Instance.new("UICorner"); bgCorner.CornerRadius = UDim.new(0.5, 0); bgCorner.Parent = toggleBtn
+
+        circle = Instance.new("Frame")
+        circle.Size = UDim2.new(0, 18, 0, 18)
+        circle.Position = UDim2.new(0, 3, 0, 3)
+        circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        circle.Parent = toggleBtn
+        
+        local cirCorner = Instance.new("UICorner"); cirCorner.CornerRadius = UDim.new(0.5, 0); cirCorner.Parent = circle
+    else
+        local hitbox = Instance.new("TextButton")
+        hitbox.Size = UDim2.new(1, 0, 1, 0)
+        hitbox.Position = UDim2.new(0, 0, 0, 0)
+        hitbox.BackgroundTransparency = 1
+        hitbox.Text = ""
+        hitbox.ZIndex = 5
+        hitbox.Parent = frame
+        hitbox.MouseButton1Click:Connect(function()
+            if onToggleCallback then onToggleCallback() end
+            frame.BackgroundColor3 = Color3.fromRGB(50, 120, 255)
+            task.delay(0.2, function() frame.BackgroundColor3 = Color3.fromRGB(35, 45, 70) end)
+        end)
+    end
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 100, 0, 22)
+    bindBtn.Position = UDim2.new(0, 15, 0, hasInput and 78 or 58)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+    bindBtn.Text = "Bind: None"
+    bindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    bindBtn.Font = Enum.Font.SourceSansBold
+    bindBtn.TextSize = 12
+    bindBtn.ZIndex = 10
+    bindBtn.Parent = frame
+    local bindCorner = Instance.new("UICorner"); bindCorner.CornerRadius = UDim.new(0, 4); bindCorner.Parent = bindBtn
+
+    local clearBindBtn = Instance.new("TextButton")
+    clearBindBtn.Size = UDim2.new(0, 100, 0, 22)
+    clearBindBtn.Position = UDim2.new(0, 125, 0, hasInput and 78 or 58)
+    clearBindBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+    clearBindBtn.Text = "Clear Bind"
+    clearBindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clearBindBtn.Font = Enum.Font.SourceSansBold
+    clearBindBtn.TextSize = 12
+    clearBindBtn.Visible = false
+    clearBindBtn.ZIndex = 10
+    clearBindBtn.Parent = frame
+    local clearCorner = Instance.new("UICorner"); clearCorner.CornerRadius = UDim.new(0, 4); clearCorner.Parent = clearBindBtn
+
+    local miniBtn = Instance.new("TextButton")
+    miniBtn.Size = UDim2.new(0, 100, 0, 22)
+    miniBtn.Position = UDim2.new(0, 235, 0, hasInput and 78 or 58)
+    miniBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+    miniBtn.Text = "New Button"
+    miniBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    miniBtn.Font = Enum.Font.SourceSansBold
+    miniBtn.TextSize = 12
+    miniBtn.ZIndex = 10
+    miniBtn.Parent = frame
+    local miniCorner = Instance.new("UICorner"); miniCorner.CornerRadius = UDim.new(0, 4); miniCorner.Parent = miniBtn
+
+    feature.ui = { frame = frame, toggleBtn = toggleBtn, circle = circle, bindBtn = bindBtn, miniBtn = miniBtn, textBox = textBox, clearBindBtn = clearBindBtn }
+
+    local function updateButtons()
+        if feature.key then
+            clearBindBtn.Visible = true
+            miniBtn.Position = UDim2.new(0, 235, 0, hasInput and 78 or 58)
+        else
+            clearBindBtn.Visible = false
+            miniBtn.Position = UDim2.new(0, 125, 0, hasInput and 78 or 58)
+        end
+        if feature.miniBtn and feature.miniBtn:FindFirstChild("KeyIndicator") then
+            feature.miniBtn.KeyIndicator.Text = feature.key and feature.key.Name or ""
+            feature.miniBtn.KeyIndicator.Visible = (feature.key ~= nil)
+        end
+    end
+
+    function feature.UpdateUI()
+        if not isAction and toggleBtn and circle then
+            if feature.isOn then
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 255)
+                circle.Position = UDim2.new(0, 25, 0, 3)
+            else
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+                circle.Position = UDim2.new(0, 3, 0, 3)
+            end
+        end
+        if feature.miniBtn then
+            feature.miniBtn.Text = title .. (isAction and "" or (": " .. (feature.isOn and "ON" or "OFF")))
+            feature.miniBtn.BackgroundColor3 = (isAction or feature.isOn) and Color3.fromRGB(50, 120, 255) or Color3.fromRGB(35, 45, 70)
+        end
+    end
+
+    function feature.Toggle()
+        if isAction then
+            if onToggleCallback then onToggleCallback() end
+            if feature.miniBtn then
+                feature.miniBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+                task.delay(0.2, function() if feature.miniBtn then feature.miniBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 255) end end)
+            end
+        else
+            feature.isOn = not feature.isOn
+            feature.UpdateUI()
+            if onToggleCallback then onToggleCallback(feature.isOn, feature) end
+        end
+    end
+
+    if toggleBtn then
+        toggleBtn.MouseButton1Click:Connect(function() feature.Toggle() end)
+    end
+
+    bindBtn.MouseButton1Click:Connect(function()
+        bindingFeature = feature
+        bindBtn.Text = "Press key..."
+        bindBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 50)
+    end)
+
+    clearBindBtn.MouseButton1Click:Connect(function()
+        feature.key = nil
+        bindBtn.Text = "Bind: None"
+        bindBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+        updateButtons()
+    end)
+
+    miniBtn.MouseButton1Click:Connect(function()
+        if feature.miniBtn then
+            feature.miniBtn:Destroy()
+            feature.miniBtn = nil
+            miniBtn.Text = "New Button"
+        else
+            local mBtn = Instance.new("TextButton")
+            mBtn.Size = UDim2.new(0, 200, 0, 45) 
+            mBtn.Position = UDim2.new(0, 20, 0, 100)
+            mBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 70)
+            mBtn.Text = title .. (isAction and "" or ": OFF")
+            mBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            mBtn.Font = Enum.Font.SourceSansBold
+            mBtn.TextSize = 18 
+            mBtn.Parent = screen
+            
+            local mCorner = Instance.new("UICorner"); mCorner.CornerRadius = UDim.new(0, 8); mCorner.Parent = mBtn
+            local mStroke = Instance.new("UIStroke"); mStroke.Color = Color3.fromRGB(0, 0, 0); mStroke.Thickness = 1; mStroke.Transparency = 0.5; mStroke.Parent = mBtn
+
+            local keyIndicator = Instance.new("TextLabel")
+            keyIndicator.Name = "KeyIndicator"
+            keyIndicator.Size = UDim2.new(0, 20, 0, 20)
+            keyIndicator.Position = UDim2.new(1, -22, 0, 2)
+            keyIndicator.BackgroundColor3 = Color3.fromRGB(20, 25, 35)
+            keyIndicator.Text = feature.key and feature.key.Name or ""
+            keyIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
+            keyIndicator.Font = Enum.Font.SourceSansBold
+            keyIndicator.TextSize = 12
+            keyIndicator.Visible = (feature.key ~= nil)
+            keyIndicator.Parent = mBtn
+            local kCorner = Instance.new("UICorner"); kCorner.CornerRadius = UDim.new(0, 4); kCorner.Parent = keyIndicator
+            local kStroke = Instance.new("UIStroke"); kStroke.Color = Color3.fromRGB(0, 0, 0); kStroke.Thickness = 1; kStroke.Parent = keyIndicator
+
+            feature.miniBtn = mBtn
+            miniBtn.Text = "Delete Button"
+
+            local dragging, dragInput, dragStart, startPos
+            mBtn.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true; dragStart = input.Position; startPos = mBtn.Position
+                    input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+                end
+            end)
+            mBtn.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if input == dragInput and dragging then
+                    local delta = input.Position - dragStart
+                    mBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                end
+            end)
+            mBtn.MouseButton1Click:Connect(function() feature.Toggle() end)
+            
+            feature.UpdateUI()
+            updateButtons()
+        end
+    end)
+
+    table.insert(Features, feature)
+    updateButtons()
+    return feature
+end
+
+-- ==========================================
+-- 3.5. ФУНКЦИЯ ДЛЯ АККОРДЕОНОВ (КАК В TEST)
+-- ==========================================
+local function createAccordion(title, order, parentMenu, contentBuilder)
+    local accordionFrame = Instance.new("Frame")
+    accordionFrame.Size = UDim2.new(1, 0, 0, 45)
+    accordionFrame.BackgroundColor3 = Color3.fromRGB(35, 45, 70)
+    accordionFrame.BorderSizePixel = 0
+    accordionFrame.LayoutOrder = order
+    accordionFrame.Parent = parentMenu
+
+    local accordionCorner = Instance.new("UICorner"); accordionCorner.CornerRadius = UDim.new(0, 8); accordionCorner.Parent = accordionFrame
+
+    local accBtn = Instance.new("TextButton")
+    accBtn.Size = UDim2.new(1, 0, 0, 45)
+    accBtn.BackgroundTransparency = 1
+    accBtn.Text = "  " .. title
+    accBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    accBtn.Font = Enum.Font.SourceSansBold
+    accBtn.TextSize = 18
+    accBtn.TextXAlignment = Enum.TextXAlignment.Left
+    accBtn.Parent = accordionFrame
+
+    local accArrow = Instance.new("TextLabel")
+    accArrow.Size = UDim2.new(0, 30, 0, 45)
+    accArrow.Position = UDim2.new(1, -40, 0, 0)
+    accArrow.BackgroundTransparency = 1
+    accArrow.Text = "▼"
+    accArrow.TextColor3 = Color3.fromRGB(200, 200, 200)
+    accArrow.Font = Enum.Font.SourceSansBold
+    accArrow.TextSize = 18
+    accArrow.Parent = accordionFrame
+
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, -20, 0, 0)
+    contentFrame.Position = UDim2.new(0, 10, 0, 45)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ClipsDescendants = true
+    contentFrame.Parent = accordionFrame
+
+    local contentLayout = Instance.new("UIListLayout")
+    contentLayout.Padding = UDim.new(0, 5)
+    contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    contentLayout.Parent = contentFrame
+
+    local isAccordionOpen = false
+
+    accBtn.MouseButton1Click:Connect(function()
+        isAccordionOpen = not isAccordionOpen
+        if isAccordionOpen then
+            local finalHeight = 45 + (contentBuilder(contentFrame) * 40) + 10
+            TweenService:Create(accordionFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, 0, 0, finalHeight)}):Play()
+            TweenService:Create(accArrow, TweenInfo.new(0.3), {Rotation = 180}):Play()
+            TweenService:Create(contentFrame, TweenInfo.new(0.3), {Size = UDim2.new(1, -20, 0, finalHeight - 55)}):Play()
+        else
+            TweenService:Create(accordionFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, 0, 0, 45)}):Play()
+            TweenService:Create(accArrow, TweenInfo.new(0.3), {Rotation = 0}):Play()
+            TweenService:Create(contentFrame, TweenInfo.new(0.3), {Size = UDim2.new(1, -20, 0, 0)}):Play()
+        end
+    end)
+    
+    return contentFrame
+end
+
+-- ==========================================
+-- 4. ВКЛАДКА AUTOMATION
+-- ==========================================
+local isAutoElevatorActive = false
+local hasPanicked = false
+
+createFeatureToggle("auto_elevator", "Auto teleport to elevator on panic", "", 1, function(bool)
+    isAutoElevatorActive = bool
+    if bool then
+        local conn = RunService.Heartbeat:Connect(function()
+            if not isAutoElevatorActive then return end
+            local floor = workspace:FindFirstChild("CurrentFloor")
+            local panic = floor and floor:FindFirstChild("Panic")
+            
+            if panic and panic:IsA("BoolValue") then
+                if panic.Value and not hasPanicked then
+                    hasPanicked = true
+                    local char = player.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local spawn = workspace:FindFirstChildWhichIsA("SpawnLocation", true) 
+                        if spawn then 
+                            hrp.CFrame = spawn.CFrame + Vector3.new(0, 3, 0)
+                        end
+                    end
+                elseif not panic.Value then
+                    hasPanicked = false
+                end
+            end
+        end)
+        table.insert(getgenv().TeeshaLoops, conn)
+    end
+end, autoMenu)
+
+local isAutoEscapeActive = false
+
+createFeatureToggle("auto_escape_squirm", "Auto escape squirm", "Automatically escapes Twisted grabs.", 2, function(bool)
+    isAutoEscapeActive = bool
+    if bool then
+        local conn = RunService.Heartbeat:Connect(function()
+            if not isAutoEscapeActive then return end
+            local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+            local escapeEvent = events and events:FindFirstChild("Adicttedsqerm")
+            if escapeEvent then
+                pcall(function()
+                    escapeEvent:FireServer("Win")
+                end)
+            end
+        end)
+        table.insert(getgenv().TeeshaLoops, conn)
+    end
+end, autoMenu)
+
+-- ==========================================
+-- 4.5. ХЕЛПЕРЫ ДЛЯ ПОДБОРА ПРЕДМЕТОВ
+-- ==========================================
+local function dbg(...)
+    print("[Teesha]", ...)
+end
+
+local hasFirePrompt = (type(fireproximityprompt) == "function")
+
+local function firePromptSafe(prompt)
+    if not prompt or not prompt.Parent or not prompt.Enabled then return false end
+    
+    local ok = pcall(function()
+        prompt.HoldDuration = 0
+        prompt:InputHoldBegin()
+        task.wait(0.1) 
+        prompt:InputHoldEnd()
+    end)
+    if ok then return true end
+    
+    if hasFirePrompt then
+        if pcall(fireproximityprompt, prompt) then return true end
+        if pcall(fireproximityprompt, prompt, true) then return true end
+    end
+    
+    return false
+end
+
+local function doPickupTrip(targets, returnCFrame, label)
+    dbg(label or "trip", "| targets:", #targets)
+    if #targets == 0 then dbg("NO TARGETS"); return end
+
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then dbg("no hrp or hum"); return end
+
+    hum.PlatformStand = false
+    hrp.Anchored = false
+
+    local done = 0
+    for i, t in ipairs(targets) do
+        if not screen.Parent then dbg("gui gone"); break end
+        local c = player.Character
+        local h = c and c:FindFirstChild("HumanoidRootPart")
+        local hu = c and c:FindFirstChildOfClass("Humanoid")
+        if not h or not hu then break end
+
+        if t.part and t.part.Parent then
+            for _, track in ipairs(hu:GetPlayingAnimationTracks()) do
+                track:Stop()
+            end
+
+            pcall(function() 
+                h.CFrame = t.part.CFrame + Vector3.new(0, 1.5, 0) 
+            end)
+            h.AssemblyLinearVelocity = Vector3.zero
+            
+            task.wait(0.2)
+
+            local fired = false
+            if t.prompt and t.prompt.Parent and t.prompt.Enabled then
+                fired = firePromptSafe(t.prompt)
+            end
+            if not fired and t.click and t.click.Parent then
+                pcall(function() t.click:FireClickDetector() end)
+                fired = true
+            end
+
+            if fired then done = done + 1 end
+            
+            local ws = tick()
+            while t.part and t.part.Parent and (tick() - ws) < 0.15 do
+                task.wait(0.05)
+            end
+        end
+    end
+
+    dbg("trip done:", done, "of", #targets)
+
+    local c2 = player.Character
+    local h2 = c2 and c2:FindFirstChild("HumanoidRootPart")
+    local hum2 = c2 and c2:FindFirstChildOfClass("Humanoid")
+    if h2 then
+        if returnCFrame then pcall(function() h2.CFrame = returnCFrame end) end
+        h2.AssemblyLinearVelocity = Vector3.zero
+        h2.AssemblyAngularVelocity = Vector3.zero
+        h2.Anchored = false
+    end
+    if hum2 then
+        hum2.PlatformStand = false
+        pcall(function() hum2:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+    end
+end
+
+local function collectPrompts(root)
+    local targets = {}
+    for _, d in ipairs(root:GetDescendants()) do
+        if d:IsA("ProximityPrompt") and d.Enabled then
+            local part = d.Parent
+            if part and not part:IsA("BasePart") then
+                part = part:FindFirstChildWhichIsA("BasePart", true)
+            end
+            if part then
+                table.insert(targets, { part = part, prompt = d })
+            end
+        elseif d:IsA("ClickDetector") then
+            local part = d.Parent
+            if part and part:IsA("BasePart") then
+                table.insert(targets, { part = part, click = d })
+            end
+        end
+    end
+    return targets
+end
+
+local function collectByPartName(root, name)
+    local targets = {}
+    local seen = {}
+    for _, d in ipairs(root:GetDescendants()) do
+        if d:IsA("BasePart") and d.Name == name and not seen[d] then
+            seen[d] = true
+            local prompt = d:FindFirstChildWhichIsA("ProximityPrompt", true)
+            local click = d:FindFirstChildWhichIsA("ClickDetector", true)
+            table.insert(targets, { part = d, prompt = prompt, click = click })
+        end
+    end
+    return targets
+end
+
+local function collectFolderContents(folder)
+    local targets = {}
+    local seen = {}
+    for _, d in ipairs(folder:GetDescendants()) do
+        if d:IsA("BasePart") and not seen[d] then
+            seen[d] = true
+            local prompt = d:FindFirstChildWhichIsA("ProximityPrompt", true)
+            local click = d:FindFirstChildWhichIsA("ClickDetector", true)
+            table.insert(targets, { part = d, prompt = prompt, click = click })
+        end
+    end
+    return targets
+end
+
+local function sortByDist(targets, hrp)
+    table.sort(targets, function(a, b)
+        return (a.part.Position - hrp.Position).Magnitude < (b.part.Position - hrp.Position).Magnitude
+    end)
+end
+
+-- ==========================================
+-- 5. ФУНКЦИИ MAIN
+-- ==========================================
+createFeatureToggle("enable_jump", "Enable Jump", "Makes you able to jump", 1, function(bool)
+    if bool then
+        local function fixCharacter(char)
+            if getgenv().TeeshaEnableJumpThread then task.cancel(getgenv().TeeshaEnableJumpThread) end
+            local humanoid = char:WaitForChild("Humanoid", 10)
+            if not humanoid then return end
+            getgenv().TeeshaEnableJumpThread = task.spawn(function()
+                while humanoid and humanoid.Parent do
+                    pcall(function()
+                        humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+                        if humanoid.UseJumpPower then humanoid.JumpPower = 50 else humanoid.JumpHeight = 7.2 end
+                    end)
+                    task.wait(2)
+                end
+            end)
+        end
+        fixCharacter(player.Character or player.CharacterAdded:Wait())
+    else
+        if getgenv().TeeshaEnableJumpThread then task.cancel(getgenv().TeeshaEnableJumpThread) end
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+            char.Humanoid.JumpPower = 0; char.Humanoid.JumpHeight = 0
+        end
+    end
+end, mainMenu)
+
+createFeatureToggle("infinite_jump", "Infinite Jump", "Makes you able to jump in mid air", 2, function(bool) getgenv().TeeshaInfiniteJump = bool end, mainMenu)
+
+getgenv().TeeshaInfiniteJumpConn = UserInputService.JumpRequest:Connect(function()
+    if getgenv().TeeshaInfiniteJump then
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+createFeatureToggle("noclip", "Noclip", "Walk through walls.", 3, function(bool)
+    getgenv().TeeshaNoclipActive = bool
+    if bool then
+        local conn = RunService.Stepped:Connect(function()
+            if not getgenv().TeeshaNoclipActive then return end
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp.Position.Y < -50 then
+                    hrp.CFrame = CFrame.new(hrp.Position.X, 15, hrp.Position.Z)
+                end
+                for _, v in pairs(char:GetDescendants()) do
+                    if v:IsA("BasePart") and v.CanCollide then v.CanCollide = false end
+                end
+            end
+        end)
+        table.insert(getgenv().TeeshaLoops, conn)
+        local respawnConn = player.CharacterAdded:Connect(function(newChar)
+            task.wait(1)
+            if getgenv().TeeshaNoclipActive then
+                for _, v in pairs(newChar:GetDescendants()) do
+                    if v:IsA("BasePart") then v.CanCollide = false end
+                end
+            end
+        end)
+        table.insert(getgenv().TeeshaLoops, respawnConn)
+    else
+        local char = player.Character
+        if char then
+            for _, v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = true end
+            end
+        end
+    end
+end, mainMenu)
+
+local flyBV, flyAlign, flyGyro, flyConn = nil, nil, nil, nil
+
+local function startFly()
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+
+    hum.PlatformStand = true
+    hrp.Anchored = false
+    flyBV = Instance.new("BodyVelocity"); flyBV.Name = "TeeshaFlyBV"; flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5); flyBV.Velocity = Vector3.zero; flyBV.Parent = hrp
+    flyAlign = Instance.new("AlignOrientation"); flyAlign.Name = "TeeshaFlyAlign"; flyAlign.MaxTorque = 1e5; flyAlign.Responsiveness = 200; flyAlign.Parent = hrp
+    flyGyro = Instance.new("BodyGyro"); flyGyro.Name = "TeeshaFlyGyro"; flyGyro.MaxTorque = 1e5; flyGyro.P = 1e4; flyGyro.Parent = hrp
+
+    flyConn = RunService.Heartbeat:Connect(function()
+        local cam = workspace.CurrentCamera
+        local moveDir = Vector3.zero
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir -= Vector3.new(0, 1, 0) end
+
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit * 50
+            flyBV.Velocity = moveDir
+            flyAlign.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+        else
+            flyBV.Velocity = Vector3.zero
+        end
+    end)
+    table.insert(getgenv().TeeshaLoops, flyConn)
+end
+
+local function stopFly()
+    if flyBV then flyBV:Destroy() end
+    if flyAlign then flyAlign:Destroy() end
+    if flyGyro then flyGyro:Destroy() end
+    if flyConn then flyConn:Disconnect() end
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+createFeatureToggle("fly", "Fly", "Allows you to fly freely.", 4, function(bool)
+    getgenv().TeeshaFlyActive = bool
+    if bool then startFly() else stopFly() end
+end, mainMenu)
+
+createFeatureToggle("loop_speed", "Loop Speed", "Locks your speed to the value (edit live)", 5, function(bool, feature)
+    isLoopSpeedActive = bool
+    if bool then
+        local conn = RunService.RenderStepped:Connect(function()
+            if not isLoopSpeedActive then return end
+            local char = player.Character
+            if not char then return end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            local raw = feature.ui.textBox.Text
+            local target = tonumber(raw)
+            if not target or target <= 0 then target = 16 end
+            if target > 1000 then target = 1000 end
+            hum.WalkSpeed = target
+        end)
+        table.insert(getgenv().TeeshaLoops, conn)
+    else
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = 16 end
+    end
+end, mainMenu, true, "60")
+
+local function startHeavier()
+    if heavierConn then heavierConn:Disconnect() end
+    heavierConn = RunService.RenderStepped:Connect(function()
+        local char = player.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hum or not hrp then return end
+
+        local moving = UserInputService:IsKeyDown(Enum.KeyCode.W)
+            or UserInputService:IsKeyDown(Enum.KeyCode.A)
+            or UserInputService:IsKeyDown(Enum.KeyCode.S)
+            or UserInputService:IsKeyDown(Enum.KeyCode.D)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Up)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Down)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Left)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Right)
+
+        local state = hum:GetState()
+        local onGround = state ~= Enum.HumanoidStateType.Freefall and state ~= Enum.HumanoidStateType.Jumping
+
+        if onGround then
+            local vel = hrp.AssemblyLinearVelocity
+            if not moving then
+                if math.abs(vel.X) > 0.5 or math.abs(vel.Z) > 0.5 then
+                    hrp.AssemblyLinearVelocity = Vector3.new(vel.X * 0.1, vel.Y, vel.Z * 0.1)
+                end
+            else
+                local look = hrp.CFrame.LookVector
+                local flatLook = Vector3.new(look.X, 0, look.Z)
+                if flatLook.Magnitude > 0.01 then
+                    flatLook = flatLook.Unit
+                    local forward = vel.X * flatLook.X + vel.Z * flatLook.Z
+                    local side = Vector3.new(vel.X, 0, vel.Z) - flatLook * forward
+                    if side.Magnitude > 0.5 then
+                        local damped = flatLook * forward + side * 0.1
+                        hrp.AssemblyLinearVelocity = Vector3.new(damped.X, vel.Y, damped.Z)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopHeavier()
+    if heavierConn then heavierConn:Disconnect(); heavierConn = nil end
+end
+
+createFeatureToggle("heavier", "Heavier Character", "You will not slide like on ice", 6, function(bool)
+    isHeavierActive = bool
+    if bool then startHeavier() else stopHeavier() end
+end, mainMenu)
+
+local function startAntiVoid()
+    if getgenv().TeeshaAntiVoidConn then getgenv().TeeshaAntiVoidConn:Disconnect() end
+    getgenv().TeeshaAntiVoidConn = RunService.RenderStepped:Connect(function()
+        if not isAntiVoidActive then return end
+        if isAntiVoidRising then return end
+        local char = player.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if hrp.Position.Y < -450 then
+            isAntiVoidRising = true
+            local startCF = hrp.CFrame
+            local targetCF = CFrame.new(startCF.X, startCF.Y + 50, startCF.Z) * (startCF - startCF.Position)
+            local wasAnchored = hrp.Anchored
+            hrp.Anchored = true
+            local tween = TweenService:Create(hrp, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = targetCF})
+            tween:Play()
+            tween.Completed:Connect(function()
+                if hrp and hrp.Parent then
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    hrp.Anchored = wasAnchored
+                end
+                isAntiVoidRising = false
+            end)
+        end
+    end)
+    table.insert(getgenv().TeeshaLoops, getgenv().TeeshaAntiVoidConn)
+end
+
+createFeatureToggle("anti_void", "Anti Void", "Prevents you from getting voided", 7, function(bool)
+    isAntiVoidActive = bool
+    if bool then startAntiVoid() end
+end, mainMenu)
+
+local antiVoidFeature = nil
+for _, f in ipairs(Features) do if f.id == "anti_void" then antiVoidFeature = f; break end end
+if antiVoidFeature and not antiVoidFeature.isOn then
+    antiVoidFeature.isOn = true
+    antiVoidFeature.UpdateUI()
+    isAntiVoidActive = true
+    startAntiVoid()
+end
+
+local antiAfkFeature = createFeatureToggle("anti_afk", "Anti AFK", "Prevents getting kicked.", 8, function(bool)
+    if bool then
+        local conn = player.Idled:Connect(function()
+            local VirtualUser = game:GetService("VirtualUser")
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+        table.insert(getgenv().TeeshaLoops, conn)
+    end
+end, mainMenu)
+
+antiAfkFeature.isOn = true
+antiAfkFeature.UpdateUI()
+if antiAfkFeature.ui.toggleBtn then
+    antiAfkFeature.ui.toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 120, 255)
+    antiAfkFeature.ui.circle.Position = UDim2.new(0, 25, 0, 3)
+end
+
+local defaultAfkConn = player.Idled:Connect(function()
+    local VirtualUser = game:GetService("VirtualUser")
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+table.insert(getgenv().TeeshaLoops, defaultAfkConn)
+
+local function applyGod(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if not char:FindFirstChild("TeeshaGodField") then
+        local ff = Instance.new("ForceField"); ff.Name = "TeeshaGodField"; ff.Visible = false; ff.Parent = char
+    end
+    if godHealthConn then pcall(function() godHealthConn:Disconnect() end) end
+    godHealthConn = hum.HealthChanged:Connect(function(h)
+        if isGodActive and h < hum.MaxHealth then
+            hum.Health = hum.MaxHealth
+        end
+    end)
+end
+
+createFeatureToggle("god", "God Mode", "except Bosker and Razzle dazzle", 9, function(bool)
+    isGodActive = bool
+    if godHealthConn then pcall(function() godHealthConn:Disconnect() end); godHealthConn = nil end
+
+    if bool then
+        applyGod(player.Character)
+        task.spawn(function()
+            while isGodActive do
+                local char = player.Character
+                if char then
+                    applyGod(char)
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health < hum.MaxHealth then
+                        hum.Health = hum.MaxHealth
+                    end
+                end
+                local floor = workspace:FindFirstChild("CurrentFloor")
+                local monsters = floor and floor:FindFirstChild("Monsters")
+                if monsters then
+                    for _, monster in ipairs(monsters:GetChildren()) do
+                        if monster:IsA("Model") then
+                            local mn = monster.Name:lower()
+                            if not (mn:find("bosker") or mn:find("razzle") or mn:find("dazzle")) then
+                                for _, obj in ipairs(monster:GetDescendants()) do
+                                    if obj:IsA("TouchTransmitter") then obj:Destroy()
+                                    elseif obj:IsA("BasePart") and obj.Name == "Hitbox" then obj.CanCollide = false end
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(0.05)
+            end
+        end)
+        local respawnConn = player.CharacterAdded:Connect(function(newChar)
+            task.wait(0.5)
+            if isGodActive then applyGod(newChar) end
+        end)
+        table.insert(getgenv().TeeshaLoops, respawnConn)
+    else
+        local char = player.Character
+        if char then
+            local ff = char:FindFirstChild("TeeshaGodField"); if ff then ff:Destroy() end
+        end
+        local floor = workspace:FindFirstChild("CurrentFloor")
+        local monsters = floor and floor:FindFirstChild("Monsters")
+        if monsters then
+            for _, monster in ipairs(monsters:GetChildren()) do
+                if monster:IsA("Model") then
+                    for _, obj in ipairs(monster:GetDescendants()) do
+                        if obj:IsA("BasePart") and obj.Name == "Hitbox" then obj.CanCollide = true end
+                    end
+                end
+            end
+        end
+    end
+end, mainMenu)
+
+createFeatureToggle("delete_twisteds", "Delete all twisteds", "", 10, function()
+    local fl = workspace:FindFirstChild("CurrentFloor")
+    local monsters = fl and fl:FindFirstChild("Monsters")
+    if monsters then
+        for _, monster in ipairs(monsters:GetChildren()) do
+            if monster:IsA("Model") then
+                local hrp = monster:FindFirstChild("HumanoidRootPart") or monster.PrimaryPart
+                if hrp then
+                    hrp.CFrame = CFrame.new(hrp.Position.X, -499, hrp.Position.Z)
+                    for _, part in ipairs(monster:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+                end
+            end
+        end
+        print("[Teesha] Teleported all twisteds to Y = -499")
+    end
+end, mainMenu, false, nil, true)
+
+createFeatureToggle("extract", "Inf Extract Speed", "I think you know what it does", 11, function(bool)
+    isExtractActive = bool
+    if bool then
+        local genFolderFunc = function()
+            local floor = workspace:FindFirstChild("CurrentFloor")
+            return floor and (floor:FindFirstChild("Genorators") or floor:FindFirstChild("Generators"))
+        end
+        local conn = RunService.Heartbeat:Connect(function()
+            local skillCheck = game:GetService("ReplicatedStorage"):FindFirstChild("Events") and game:GetService("ReplicatedStorage").Events:FindFirstChild("SkillCheck")
+            local genFolder = genFolderFunc()
+            if skillCheck and genFolder then
+                local char = player.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    for _, gen in ipairs(genFolder:GetChildren()) do
+                        local primary = gen.PrimaryPart or gen:FindFirstChildWhichIsA("BasePart")
+                        if primary and (primary.Position - hrp.Position).Magnitude < 20 then
+                            pcall(function() skillCheck:FireServer(gen, true) end)
+                        end
+                    end
+                end
+            end
+        end)
+        table.insert(getgenv().TeeshaLoops, conn)
+    end
+end, mainMenu)
+
+createFeatureToggle("pickup_items", "Pick up all items", "Teleports to each item and picks it up", 12, function()
+    task.spawn(function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then dbg("pickup_items: no hrp"); return end
+        local original = hrp.CFrame
+
+        local fl = workspace:FindFirstChild("CurrentFloor")
+        local itemsFolder = fl and fl:FindFirstChild("Items")
+        if not itemsFolder then itemsFolder = workspace:FindFirstChild("Items") end
+        if not itemsFolder then dbg("pickup_items: Items folder not found"); return end
+
+        local targets = collectPrompts(itemsFolder)
+        dbg("pickup_items: found", #targets, "targets")
+        sortByDist(targets, hrp)
+        doPickupTrip(targets, original, "pickup_items")
+    end)
+end, mainMenu, false, nil, true)
+
+createFeatureToggle("pickup_data", "Pick up all Data", "Teleports to each Data part and picks it up", 13, function()
+    task.spawn(function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then dbg("pickup_data: no hrp"); return end
+        local original = hrp.CFrame
+
+        local fl = workspace:FindFirstChild("CurrentFloor")
+        if not fl then dbg("pickup_data: CurrentFloor not found"); return end
+
+        local targets = collectByPartName(fl, "Data")
+        if #targets == 0 then
+            local items = fl:FindFirstChild("Items")
+            local dataFolder = items and items:FindFirstChild("Data")
+            if dataFolder and (dataFolder:IsA("Folder") or dataFolder:IsA("Model")) then
+                targets = collectFolderContents(dataFolder)
+            end
+        end
+        dbg("pickup_data: found", #targets, "targets")
+        sortByDist(targets, hrp)
+        doPickupTrip(targets, original, "pickup_data")
+    end)
+end, mainMenu, false, nil, true)
+
+createFeatureToggle("pickup_dvd", "Pick up all DVD", "Teleports to each DVD part and picks it up", 14, function()
+    task.spawn(function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then dbg("pickup_dvd: no hrp"); return end
+        local original = hrp.CFrame
+
+        local fl = workspace:FindFirstChild("CurrentFloor")
+        if not fl then dbg("pickup_dvd: CurrentFloor not found"); return end
+
+        local targets = collectByPartName(fl, "DVD")
+        if #targets == 0 then
+            local folders = {}
+            local items = fl:FindFirstChild("Items")
+            if items then
+                local d = items:FindFirstChild("DVD")
+                if d and (d:IsA("Folder") or d:IsA("Model")) then table.insert(folders, d) end
+            end
+            local d2 = fl:FindFirstChild("ItemsDVD")
+            if d2 and (d2:IsA("Folder") or d2:IsA("Model")) then table.insert(folders, d2) end
+            local d3 = fl:FindFirstChild("DVD")
+            if d3 and (d3:IsA("Folder") or d3:IsA("Model")) then table.insert(folders, d3) end
+            for _, f in ipairs(folders) do
+                local more = collectFolderContents(f)
+                for _, t in ipairs(more) do table.insert(targets, t) end
+            end
+        end
+        dbg("pickup_dvd: found", #targets, "targets")
+        sortByDist(targets, hrp)
+        doPickupTrip(targets, original, "pickup_dvd")
+    end)
+end, mainMenu, false, nil, true)
+
+-- ==========================================
+-- 5.5. НОВЫЕ ФУНКЦИИ FUN (Jerk Off & Flips)
+-- ==========================================
+local jerkTool = nil
+local jerkTrack = nil
+local jerkJorkin = false
+local jerkThread = nil
+
+local function createJerkTool()
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local backpack = player:FindFirstChild("Backpack") or player:WaitForChild("Backpack")
+    if not hum or not backpack then return end
+
+    local old = backpack:FindFirstChild("Jerk Off") or char:FindFirstChild("Jerk Off")
+    if old then old:Destroy() end
+
+    jerkTool = Instance.new("Tool")
+    jerkTool.Name = "Jerk Off"
+    jerkTool.RequiresHandle = false
+    jerkTool.CanBeDropped = false
+    jerkTool.Parent = backpack
+
+    jerkJorkin = false
+
+    local function stopTomfoolery()
+        jerkJorkin = false
+        if jerkTrack then
+            pcall(function() jerkTrack:Stop() end)
+            jerkTrack = nil
+        end
+    end
+
+    jerkTool.Equipped:Connect(function() jerkJorkin = true end)
+    jerkTool.Unequipped:Connect(stopTomfoolery)
+    hum.Died:Connect(stopTomfoolery)
+
+    jerkThread = task.spawn(function()
+        while jerkTool and jerkTool.Parent do
+            task.wait(0.1)
+            if not jerkJorkin then continue end
+
+            local isR15 = hum.RigType == Enum.HumanoidRigType.R15
+            if not jerkTrack then
+                local anim = Instance.new("Animation")
+                anim.AnimationId = not isR15 and "rbxassetid://72042024" or "rbxassetid://698251653"
+                local success, result = pcall(function()
+                    return hum:LoadAnimation(anim)
+                end)
+                if success then
+                    jerkTrack = result
+                else
+                    break
+                end
+            end
+
+            if jerkTrack then
+                pcall(function()
+                    jerkTrack:Play()
+                    jerkTrack:AdjustSpeed(isR15 and 0.7 or 0.65)
+                    jerkTrack.TimePosition = 0.6
+                end)
+                
+                task.wait(0.1)
+                local startTick = tick()
+                while jerkTrack and jerkTrack.TimePosition < (not isR15 and 0.65 or 0.7) and (tick() - startTick) < 2 do
+                    task.wait(0.1)
+                end
+                
+                if jerkTrack then
+                    pcall(function() jerkTrack:Stop() end)
+                    jerkTrack = nil
+                end
+            end
+        end
+    end)
+end
+
+local function removeJerkTool()
+    jerkJorkin = false
+    if jerkThread then task.cancel(jerkThread); jerkThread = nil end
+    if jerkTrack then pcall(function() jerkTrack:Stop() end); jerkTrack = nil end
+    
+    local char = player.Character
+    local backpack = player:FindFirstChild("Backpack")
+    
+    if backpack then
+        local t = backpack:FindFirstChild("Jerk Off")
+        if t then t:Destroy() end
+    end
+    if char then
+        local t = char:FindFirstChild("Jerk Off")
+        if t then t:Destroy() end
+    end
+    jerkTool = nil
+end
+
+createFeatureToggle("jerk_off_tool", "Jerk Off Tool", "Spawns the secret Jerk Off tool.", 1, function(bool)
+    if bool then
+        createJerkTool()
+    else
+        removeJerkTool()
+    end
+end, funMenu)
+
+local function doFlip(direction)
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+
+    for _, v in ipairs(hrp:GetChildren()) do
+        if v.Name == "TeeshaFlipLift" or v.Name == "TeeshaFlipSpin" then 
+            v:Destroy() 
+        end
+    end
+
+    hum.PlatformStand = true
+
+    local lift = Instance.new("BodyPosition")
+    lift.Name = "TeeshaFlipLift"
+    lift.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    lift.P = 10000
+    lift.D = 500
+    lift.Position = hrp.Position + Vector3.new(0, 15, 0)
+    lift.Parent = hrp
+
+    local spin = Instance.new("BodyAngularVelocity")
+    spin.Name = "TeeshaFlipSpin"
+    spin.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    spin.P = 10000
+    spin.AngularVelocity = hrp.CFrame.RightVector * (direction * 15) 
+    spin.Parent = hrp
+
+    task.wait(0.4)
+
+    lift:Destroy()
+    spin:Destroy()
+
+    hum.PlatformStand = false
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, math.rad(hrp.Orientation.Y), 0)
+end
+
+createFeatureToggle("backflip", "Backflip", "", 2, function()
+    doFlip(-1)
+end, funMenu, false, nil, true)
+
+createFeatureToggle("frontflip", "Frontflip", "", 3, function()
+    doFlip(1)
+end, funMenu, false, nil, true)
+
+-- ==========================================
+-- 6. ФУНКЦИИ VISUAL
+-- ==========================================
+createFeatureToggle("esp_mon", "ESP Twisteds", "Highlights monsters and shows info.", 1, function(bool)
+    isEspMonstersActive = bool
+    if bool then
+        task.spawn(function()
+            while isEspMonstersActive do
+                local floor = workspace:FindFirstChild("CurrentFloor")
+                local monsters = floor and floor:FindFirstChild("Monsters")
+                if monsters then
+                    for _, monster in ipairs(monsters:GetChildren()) do
+                        if monster:IsA("Model") then
+                            if not monster:FindFirstChild("ESP_Highlight") then
+                                local hl = Instance.new("Highlight"); hl.Name = "ESP_Highlight"; hl.FillColor = Color3.fromRGB(255, 0, 0); hl.OutlineColor = Color3.fromRGB(255, 255, 255); hl.FillTransparency = 0.5; hl.Parent = monster
+                            end
+                            local head = monster:FindFirstChild("Head") or monster:FindFirstChild("HumanoidRootPart") or monster.PrimaryPart
+                            if head then
+                                local billboard = head:FindFirstChild("ESP_Billboard")
+                                if not billboard then
+                                    billboard = Instance.new("BillboardGui"); billboard.Name = "ESP_Billboard"; billboard.Size = UDim2.new(0, 250, 0, 60); billboard.StudsOffset = Vector3.new(0, 2.5, 0); billboard.AlwaysOnTop = true
+                                    local txt = Instance.new("TextLabel"); txt.Name = "ESP_Text"; txt.Size = UDim2.new(1, 0, 1, 0); txt.BackgroundTransparency = 1; txt.TextColor3 = Color3.fromRGB(255, 255, 255); txt.TextStrokeTransparency = 0; txt.TextStrokeColor3 = Color3.fromRGB(0,0,0); txt.Font = Enum.Font.SourceSansBold; txt.TextSize = 20; txt.Parent = billboard
+                                    billboard.Parent = head
+                                end
+                                local monsterName = monster.Name
+                                local displayName = string.gsub(monsterName, "[Aa]ddict", ""):gsub("%s+", "")
+                                local speedVal = "N/A"
+                                local statsFolder = monster:FindFirstChild("Stats")
+                                if statsFolder then
+                                    local runSpeed = statsFolder:FindFirstChild("Runspeed") or statsFolder:FindFirstChild("RunSpeed")
+                                    if runSpeed and runSpeed:IsA("NumberValue") then speedVal = tostring(runSpeed.Value) end
+                                end
+                                if speedVal == "N/A" then
+                                    local config = monster:FindFirstChild("Configuration")
+                                    if config then
+                                        local runSpeed = config:FindFirstChild("RunSpeed") or config:FindFirstChild("Runspeed")
+                                        if runSpeed and runSpeed:IsA("NumberValue") then speedVal = tostring(runSpeed.Value) end
+                                    end
+                                end
+                                billboard.ESP_Text.Text = "Name: " .. displayName .. "\nSpeed: " .. speedVal
+                            end
+                        end
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    else
+        local floor = workspace:FindFirstChild("CurrentFloor")
+        local monsters = floor and floor:FindFirstChild("Monsters")
+        if monsters then
+            for _, obj in ipairs(monsters:GetDescendants()) do
+                if obj.Name == "ESP_Highlight" or obj.Name == "ESP_Billboard" then obj:Destroy() end
+            end
+        end
+    end
+end, visualMenu)
+
+-- НОВЫЙ ESP ГЕНЕРАТОРОВ
+local hideGenMode = "None" 
+createFeatureToggle("esp_gen", "ESP Generators", "Highlights generators.", 2, function(bool)
+    isEspGeneratorsActive = bool
+    if bool then
+        task.spawn(function()
+            while isEspGeneratorsActive do
+                local floor = workspace:FindFirstChild("CurrentFloor")
+                local genFolder = floor and (floor:FindFirstChild("Genorators") or floor:FindFirstChild("Generators"))
+                if genFolder then
+                    for _, gen in ipairs(genFolder:GetChildren()) do
+                        local hl = gen:FindFirstChild("ESP_Highlight")
+                        local status = gen:FindFirstChild("ColorStatus")
+                        local isDone = status and status:IsA("BasePart") and status.Color == Color3.fromRGB(0, 255, 0)
+                        
+                        local shouldHide = false
+                        if hideGenMode == "Completed" and isDone then shouldHide = true end
+                        if hideGenMode == "NotCompleted" and not isDone then shouldHide = true end
+                        
+                        if shouldHide then
+                            if hl then hl:Destroy() end
+                        else
+                            if isDone then
+                                if not hl then hl = Instance.new("Highlight"); hl.Name = "ESP_Highlight"; hl.Parent = gen end
+                                hl.FillColor = Color3.fromRGB(128, 0, 128)
+                                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                hl.FillTransparency = 0.5
+                            else
+                                local config = gen:FindFirstChild("Configuration")
+                                if config then
+                                    local activeVal = config:FindFirstChild("Active"); local connieVal = config:FindFirstChild("Connie")
+                                    if activeVal and activeVal.Value then
+                                        if not hl then hl = Instance.new("Highlight"); hl.Name = "ESP_Highlight"; hl.Parent = gen end
+                                        hl.FillColor = Color3.fromRGB(255, 255, 255); hl.OutlineColor = Color3.fromRGB(255, 255, 255); hl.FillTransparency = 0.5
+                                    elseif connieVal and connieVal.Value then
+                                        if not hl then hl = Instance.new("Highlight"); hl.Name = "ESP_Highlight"; hl.Parent = gen end
+                                        hl.FillColor = Color3.fromRGB(0, 255, 255); hl.OutlineColor = Color3.fromRGB(255, 255, 255); hl.FillTransparency = 0.5
+                                    else
+                                        if not hl then hl = Instance.new("Highlight"); hl.Name = "ESP_Highlight"; hl.Parent = gen end
+                                        hl.FillColor = Color3.fromRGB(0, 0, 0); hl.OutlineColor = Color3.fromRGB(255, 255, 255); hl.FillTransparency = 0.5
+                                    end
+                                elseif hl then hl:Destroy() end
+                            end
+                        end
+                    end
+                end
+                task.wait(0.5)
+            end
+        end)
+    else
+        local floor = workspace:FindFirstChild("CurrentFloor")
+        local genFolder = floor and (floor:FindFirstChild("Genorators") or floor:FindFirstChild("Generators"))
+        if genFolder then
+            for _, obj in ipairs(genFolder:GetDescendants()) do
+                if obj.Name == "ESP_Highlight" then obj:Destroy() end
+            end
+        end
+    end
+end, visualMenu)
+
+-- СПИСОК СКРЫТИЯ ГЕНЕРАТОРОВ (Использует Аккордеон)
+local hideGenContent = createAccordion("Hide machine when:", 3, visualMenu, function(contentParent)
+    local c1 = Instance.new("TextButton"); c1.Size = UDim2.new(1, 0, 0, 35); c1.BackgroundColor3 = Color3.fromRGB(50, 55, 70); c1.Text = "Completed"; c1.TextColor3 = Color3.fromRGB(255, 255, 255); c1.Font = Enum.Font.SourceSansBold; c1.TextSize = 16; c1.Parent = contentParent
+    local cc1 = Instance.new("UICorner"); cc1.CornerRadius = UDim.new(0, 6); cc1.Parent = c1
+    
+    local c2 = Instance.new("TextButton"); c2.Size = UDim2.new(1, 0, 0, 35); c2.BackgroundColor3 = Color3.fromRGB(50, 55, 70); c2.Text = "Not completed"; c2.TextColor3 = Color3.fromRGB(255, 255, 255); c2.Font = Enum.Font.SourceSansBold; c2.TextSize = 16; c2.Parent = contentParent
+    local cc2 = Instance.new("UICorner"); cc2.CornerRadius = UDim.new(0, 6); cc2.Parent = c2
+    
+    c1.MouseButton1Click:Connect(function()
+        if hideGenMode == "Completed" then hideGenMode = "None" else hideGenMode = "Completed" end
+        c1.BackgroundColor3 = (hideGenMode == "Completed") and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(50, 55, 70)
+        c2.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+    end)
+    
+    c2.MouseButton1Click:Connect(function()
+        if hideGenMode == "NotCompleted" then hideGenMode = "None" else hideGenMode = "NotCompleted" end
+        c2.BackgroundColor3 = (hideGenMode == "NotCompleted") and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(50, 55, 70)
+        c1.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+    end)
+    
+    return 2
+end)
+
+-- ESP PLAYERS
+local espPlayersCache = {}
+local isEspPlayersActive = false
+local indicators = {
+    Toon = true,
+    Stealth = true,
+    Health = true,
+    Speed = false,
+}
+
+createFeatureToggle("esp_players", "ESP Players", "Highlights other players with stats.", 4, function(bool)
+    isEspPlayersActive = bool
+    if bool then
+        task.spawn(function()
+            while isEspPlayersActive do
+                local currentFloor = workspace:FindFirstChild("CurrentFloor")
+                local alivePlayers = currentFloor and currentFloor:FindFirstChild("AlivePlayers")
+                
+                local myFolder = alivePlayers and alivePlayers:FindFirstChild(player.Name)
+                local myStealth, mySpeed = 0, 0
+                if myFolder and myFolder:FindFirstChild("Stats") then
+                    local extraStealth = myFolder.Stats:FindFirstChild("ExtraStealth")
+                    local stealthVal = extraStealth and extraStealth:FindFirstChild("Stealth")
+                    if stealthVal and stealthVal:IsA("NumberValue") then myStealth = stealthVal.Value end
+                    
+                    local extraSpeed = myFolder.Stats:FindFirstChild("ExtraSpeed")
+                    local speedVal = extraSpeed and extraSpeed:FindFirstChild("Speed")
+                    if speedVal and speedVal:IsA("NumberValue") then mySpeed = speedVal.Value end
+                end
+                
+                local activeNames = {}
+                if alivePlayers then
+                    for _, pFolder in ipairs(alivePlayers:GetChildren()) do
+                        if pFolder.Name ~= player.Name then
+                            local pModel = workspace:FindFirstChild(pFolder.Name)
+                            local pChar = pModel or (game.Players:FindFirstChild(pFolder.Name) and game.Players[pFolder.Name].Character)
+                            
+                            if pChar then
+                                activeNames[pFolder.Name] = true
+                                
+                                local stats = pFolder:FindFirstChild("Stats")
+                                local healthVal, maxHealthVal, stealthVal, speedVal = 100, 100, 1, 15
+                                if stats then
+                                    local h = stats:FindFirstChild("Health")
+                                    if h and h:IsA("NumberValue") then healthVal = h.Value end
+                                    if h and h:FindFirstChild("MaxHealth") and h.MaxHealth:IsA("NumberValue") then maxHealthVal = h.MaxHealth.Value end
+                                    local extraStealth = stats:FindFirstChild("ExtraStealth")
+                                    if extraStealth and extraStealth:FindFirstChild("Stealth") then stealthVal = extraStealth.Stealth.Value end
+                                    local extraSpeed = stats:FindFirstChild("ExtraSpeed")
+                                    if extraSpeed and extraSpeed:FindFirstChild("Speed") then speedVal = extraSpeed.Speed.Value end
+                                end
+                                
+                                if not espPlayersCache[pFolder.Name] then
+                                    local hl = Instance.new("Highlight")
+                                    hl.Name = "TeeshaPlayerESP"
+                                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                                    hl.Parent = pChar
+                                    
+                                    local bb = Instance.new("BillboardGui")
+                                    bb.Name = "TeeshaPlayerESP_Billboard"
+                                    bb.Size = UDim2.new(0, 250, 0, 60)
+                                    bb.StudsOffset = Vector3.new(0, 3, 0)
+                                    bb.AlwaysOnTop = true
+                                    bb.Parent = pChar:FindFirstChild("Head") or pChar:FindFirstChild("HumanoidRootPart")
+                                    
+                                    local txt = Instance.new("TextLabel")
+                                    txt.Name = "ESP_Text"
+                                    txt.Size = UDim2.new(1, 0, 1, 0)
+                                    txt.BackgroundTransparency = 1
+                                    txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+                                    txt.TextStrokeTransparency = 0
+                                    txt.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+                                    txt.Font = Enum.Font.SourceSansBold
+                                    txt.TextSize = 14
+                                    txt.TextYAlignment = Enum.TextYAlignment.Center
+                                    txt.RichText = true
+                                    txt.Parent = bb
+                                    
+                                    espPlayersCache[pFolder.Name] = { highlight = hl, billboard = bb, text = txt }
+                                end
+                                
+                                local healthRatio = math.clamp(healthVal / maxHealthVal, 0, 1)
+                                local color = Color3.fromRGB(0, 0, 0):Lerp(Color3.fromRGB(0, 200, 255), healthRatio)
+                                espPlayersCache[pFolder.Name].highlight.FillColor = color
+                                espPlayersCache[pFolder.Name].highlight.FillTransparency = 0.3
+                                
+                                local textParts = {}
+                                if indicators.Toon then table.insert(textParts, "Toon: " .. pFolder.Name) end
+                                if indicators.Health then table.insert(textParts, "Health:" .. tostring(healthVal) .. "/" .. tostring(maxHealthVal)) end
+                                if indicators.Stealth then
+                                    local stealthText = "Stealth:" .. tostring(stealthVal)
+                                    if stealthVal >= myStealth then
+                                        stealthText = "<font color='#FFFF00'>" .. stealthText .. " [Higher!]</font>"
+                                    end
+                                    table.insert(textParts, stealthText)
+                                end
+                                if indicators.Speed then
+                                    local speedText = "Speed:" .. tostring(speedVal)
+                                    if speedVal >= mySpeed then
+                                        speedText = "<font color='#FFFF00'>" .. speedText .. " [Higher!]</font>"
+                                    end
+                                    table.insert(textParts, speedText)
+                                end
+                                
+                                local total = #textParts
+                                local leftCount = math.ceil(total / 2)
+                                local leftCol, rightCol = "", ""
+                                for i = 1, total do
+                                    if i <= leftCount then
+                                        if leftCol ~= "" then leftCol = leftCol .. "\n" end
+                                        leftCol = leftCol .. textParts[i]
+                                    else
+                                        if rightCol ~= "" then rightCol = rightCol .. "\n" end
+                                        rightCol = rightCol .. textParts[i]
+                                    end
+                                end
+                                
+                                local finalText = string.format("<b>Name: %s</b>\n%s", pFolder.Name, leftCol)
+                                if rightCol ~= "" then
+                                    finalText = finalText .. "  |  " .. rightCol
+                                end
+                                
+                                espPlayersCache[pFolder.Name].text.Text = finalText
+                            end
+                        end
+                    end
+                end
+                
+                for name, data in pairs(espPlayersCache) do
+                    if not activeNames[name] then
+                        if data.highlight then data.highlight:Destroy() end
+                        if data.billboard then data.billboard:Destroy() end
+                        espPlayersCache[name] = nil
+                    end
+                end
+                
+                task.wait(0.5)
+            end
+        end)
+    else
+        for name, data in pairs(espPlayersCache) do
+            if data.highlight then data.highlight:Destroy() end
+            if data.billboard then data.billboard:Destroy() end
+            espPlayersCache[name] = nil
+        end
+    end
+end, visualMenu)
+
+-- СПИСОК ИНДИКАТОРОВ (Использует Аккордеон)
+local indContent = createAccordion("Player esp indicators:", 5, visualMenu, function(contentParent)
+    local function createIndicator(name, defaultState)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 0, 35)
+        btn.BackgroundColor3 = defaultState and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(50, 55, 70)
+        btn.Text = name
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.SourceSansBold
+        btn.TextSize = 16
+        btn.Parent = contentParent
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
+        
+        btn.MouseButton1Click:Connect(function()
+            indicators[name] = not indicators[name]
+            btn.BackgroundColor3 = indicators[name] and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(50, 55, 70)
+        end)
+    end
+    createIndicator("Toon", true)
+    createIndicator("Stealth", true)
+    createIndicator("Health", true)
+    createIndicator("Speed", false)
+    return 4
+end)
+
+-- ESP ELEVATOR
+local isEspElevatorActive = false
+createFeatureToggle("esp_elevator", "ESP Elevator", "", 6, function(bool)
+    isEspElevatorActive = bool
+    if bool then
+        task.spawn(function()
+            while isEspElevatorActive do
+                local elevator = workspace:FindFirstChild("Elevator")
+                local door = elevator and elevator:FindFirstChild("Elevator") and elevator.Elevator:FindFirstChild("Door")
+                
+                if door and not door:FindFirstChild("ESP_Highlight") then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "ESP_Highlight"
+                    hl.FillColor = Color3.fromRGB(0, 255, 0)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency = 0.5
+                    hl.Parent = door
+                end
+                task.wait(1)
+            end
+        end)
+    else
+        local elevator = workspace:FindFirstChild("Elevator")
+        local door = elevator and elevator:FindFirstChild("Elevator") and elevator.Elevator:FindFirstChild("Door")
+        if door then
+            local hl = door:FindFirstChild("ESP_Highlight")
+            if hl then hl:Destroy() end
+        end
+    end
+end, visualMenu)
+
+-- TRANSPARENT ELEVATOR
+local isTransparentElevatorActive = false
+createFeatureToggle("transp_elevator", "Transparent elevator", "", 7, function(bool)
+    isTransparentElevatorActive = bool
+    local elevator = workspace:FindFirstChild("Elevator")
+    local door = elevator and elevator:FindFirstChild("Elevator") and elevator.Elevator:FindFirstChild("Door")
+    if door then
+        if bool then
+            door.Transparency = 0.5
+        else
+            door.Transparency = 0
+        end
+    end
+end, visualMenu)
+
+-- Nickname Tags
+local nameTagFolder = nil
+local originalNameTagText = nil
+local isHideTagActive = false
+local isCustomTagActive = false
+
+local function findNameTag()
+    local ws = workspace:FindFirstChild("Players")
+    if not ws then return nil end
+    local myFolder = ws:FindFirstChild(player.Name)
+    if not myFolder then return nil end
+    local tag = myFolder:FindFirstChild("NameTag")
+    if not tag then return nil end
+    return tag:FindFirstChild("Tesr") or tag:FindFirstChildWhichIsA("TextLabel", true)
+end
+
+createFeatureToggle("hide_nick", "Hide nickname tag", "", 8, function(bool)
+    isHideTagActive = bool
+    local tagPart = findNameTag()
+    if not tagPart then return end
+    
+    if bool then
+        if not originalNameTagText then
+            originalNameTagText = tagPart.Text
+        end
+        tagPart.Text = "no"
+    else
+        if originalNameTagText then
+            tagPart.Text = originalNameTagText
+        end
+    end
+end, visualMenu)
+
+createFeatureToggle("custom_nick", "Custom nickname tag", "", 9, function(bool, feature)
+    isCustomTagActive = bool
+    local tagPart = findNameTag()
+    if not tagPart then return end
+
+    if bool then
+        if not originalNameTagText then
+            originalNameTagText = tagPart.Text
+        end
+        local customText = feature.ui.textBox.Text
+        if customText and customText ~= "" then
+            tagPart.Text = customText
+        end
+    else
+        if originalNameTagText then
+            tagPart.Text = originalNameTagText
+        end
+    end
+end, visualMenu, true, "200")
+
+-- ==========================================
+-- 6.5. ВКЛАДКА TEST (ВОССТАНОВЛЕНА)
+-- ==========================================
+local testAccordion = createAccordion("Test List", 1, testMenu, function(contentParent)
+    local yesBtn = Instance.new("TextButton")
+    yesBtn.Size = UDim2.new(1, 0, 0, 35)
+    yesBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+    yesBtn.Text = "Да"
+    yesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    yesBtn.Font = Enum.Font.SourceSansBold
+    yesBtn.TextSize = 16
+    yesBtn.Parent = contentParent
+    local yCorner = Instance.new("UICorner"); yCorner.CornerRadius = UDim.new(0, 6); yCorner.Parent = yesBtn
+
+    local noBtn = Instance.new("TextButton")
+    noBtn.Size = UDim2.new(1, 0, 0, 35)
+    noBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+    noBtn.Text = "Нет"
+    noBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    noBtn.Font = Enum.Font.SourceSansBold
+    noBtn.TextSize = 16
+    noBtn.Parent = contentParent
+    local nCorner = Instance.new("UICorner"); nCorner.CornerRadius = UDim.new(0, 6); nCorner.Parent = noBtn
+
+    yesBtn.MouseButton1Click:Connect(function()
+        TweenService:Create(yesBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 205, 50)}):Play()
+        TweenService:Create(noBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 55, 70)}):Play()
+    end)
+
+    noBtn.MouseButton1Click:Connect(function()
+        TweenService:Create(noBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 50, 50)}):Play()
+        TweenService:Create(yesBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 55, 70)}):Play()
+    end)
+    
+    return 2
+end)
+
+-- ==========================================
+-- 7. ФУНКЦИИ TELEPORT
+-- ==========================================
+createFeatureToggle("tp_tool", "Teleport Tool", "Gives you a teleport tool", 1, function(bool)
+    if bool then
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            local tool = Instance.new("Tool"); tool.Name = "Teleport"; tool.RequiresHandle = false; tool.CanBeDropped = false
+            tool.Activated:Connect(function()
+                local mouse = player:GetMouse(); local char = player.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame = CFrame.new(mouse.Hit.X, mouse.Hit.Y + 3, mouse.Hit.Z) end
+            end)
+            tool.Parent = backpack
+        end
+    else
+        local backpack = player:FindFirstChild("Backpack"); local char = player.Character
+        local tool1 = backpack and backpack:FindFirstChild("Teleport"); local tool2 = char and char:FindFirstChild("Teleport")
+        if tool1 then tool1:Destroy() end
+        if tool2 then tool2:Destroy() end
+    end
+end, teleportMenu)
+
+local function tpToGen()
+    local char = player.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local floor = workspace:FindFirstChild("CurrentFloor")
+    local genFolder = floor and (floor:FindFirstChild("Genorators") or floor:FindFirstChild("Generators"))
+    if not genFolder then return end
+    
+    local closestPart, minDist = nil, math.huge
+    for _, gen in ipairs(genFolder:GetChildren()) do
+        local status = gen:FindFirstChild("ColorStatus")
+        local isDone = status and status:IsA("BasePart") and status.Color == Color3.fromRGB(0, 255, 0)
+        
+        if not isDone then
+            local teleportPart = gen:FindFirstChild("MachineTeleportPart", true) or gen:FindFirstChildWhichIsA("BasePart")
+            if teleportPart then
+                local dist = (teleportPart.Position - hrp.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    closestPart = teleportPart
+                end
+            end
+        end
+    end
+    if closestPart then hrp.CFrame = closestPart.CFrame + Vector3.new(0, 3, 0) end
+end
+createFeatureToggle("tp_gen", "Teleport to Generator", "Teleports to the nearest broken generator.", 2, tpToGen, teleportMenu, false, nil, true)
+
+local function tpToSpawn()
+    local char = player.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local spawn = workspace:FindFirstChildWhichIsA("SpawnLocation", true) 
+    if spawn then hrp.CFrame = spawn.CFrame + Vector3.new(0, 3, 0) end
+end
+createFeatureToggle("tp_elevator", "Teleport to Elevator", "Teleports to the elevator.", 3, tpToSpawn, teleportMenu, false, nil, true)
+
+-- ==========================================
+-- 7.5. LOBBY ПОДСЕКЦИЯ
+-- ==========================================
+local lobbyHeader = Instance.new("Frame")
+lobbyHeader.Size = UDim2.new(1, 0, 0, 35)
+lobbyHeader.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+lobbyHeader.BorderSizePixel = 0
+lobbyHeader.LayoutOrder = 100
+lobbyHeader.Parent = teleportMenu
+local lhCorner = Instance.new("UICorner"); lhCorner.CornerRadius = UDim.new(0, 8); lhCorner.Parent = lobbyHeader
+local lhStroke = Instance.new("UIStroke"); lhStroke.Color = Color3.fromRGB(0, 120, 255); lhStroke.Thickness = 1; lhStroke.Parent = lobbyHeader
+
+local lobbyTitle = Instance.new("TextLabel")
+lobbyTitle.Size = UDim2.new(1, 0, 1, 0)
+lobbyTitle.BackgroundTransparency = 1
+lobbyTitle.Text = "-Lobby-"
+lobbyTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+lobbyTitle.Font = Enum.Font.SourceSansBold
+lobbyTitle.TextSize = 18
+lobbyTitle.TextXAlignment = Enum.TextXAlignment.Center
+lobbyTitle.Parent = lobbyHeader
+
+local lobbyContainer = Instance.new("Frame")
+lobbyContainer.Size = UDim2.new(1, 0, 0, 0)
+lobbyContainer.BackgroundTransparency = 1
+lobbyContainer.LayoutOrder = 101
+lobbyContainer.ClipsDescendants = true
+lobbyContainer.Parent = teleportMenu
+local lcLayout = Instance.new("UIListLayout")
+lcLayout.Padding = UDim.new(0, 10)
+lcLayout.SortOrder = Enum.SortOrder.LayoutOrder
+lcLayout.Parent = lobbyContainer
+lobbyContainer.AutomaticSize = Enum.AutomaticSize.Y
+
+local isLobby = (game.PlaceId == LOBBY_PLACE_ID)
+
+if not isLobby then
+    local warnFrame = Instance.new("Frame")
+    warnFrame.Size = UDim2.new(1, 0, 0, 70)
+    warnFrame.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+    warnFrame.BorderSizePixel = 0
+    warnFrame.LayoutOrder = 1
+    warnFrame.Parent = lobbyContainer
+    local wfCorner = Instance.new("UICorner"); wfCorner.CornerRadius = UDim.new(0, 8); wfCorner.Parent = warnFrame
+    local wfStroke = Instance.new("UIStroke"); wfStroke.Color = Color3.fromRGB(220, 80, 80); wfStroke.Thickness = 1; wfStroke.Parent = warnFrame
+
+    local warnText = Instance.new("TextLabel")
+    warnText.Size = UDim2.new(1, -20, 1, -20)
+    warnText.Position = UDim2.new(0, 10, 0, 10)
+    warnText.BackgroundTransparency = 1
+    warnText.Text = "~there would be some buttons but sadly they only work in lobby!~"
+    warnText.TextColor3 = Color3.fromRGB(255, 180, 180)
+    warnText.Font = Enum.Font.SourceSansBold
+    warnText.TextSize = 13
+    warnText.TextWrapped = true
+    warnText.TextXAlignment = Enum.TextXAlignment.Center
+    warnText.TextYAlignment = Enum.TextYAlignment.Center
+    warnText.Parent = warnFrame
+else
+    local function tpToCoords(x, y, z)
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        hrp.CFrame = CFrame.new(x, y, z)
+    end
+
+    local function makeLobbyButton(text, desc, order, onClick)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 0, desc and 70 or 50)
+        btn.BackgroundColor3 = Color3.fromRGB(35, 45, 70)
+        btn.Text = ""
+        btn.AutoButtonColor = false
+        btn.LayoutOrder = order
+        btn.Parent = lobbyContainer
+        local bCorner = Instance.new("UICorner"); bCorner.CornerRadius = UDim.new(0, 8); bCorner.Parent = btn
+        local bStroke = Instance.new("UIStroke"); bStroke.Color = Color3.fromRGB(0, 120, 255); bStroke.Thickness = 1; bStroke.Transparency = 0.6; bStroke.Parent = btn
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, -20, 0, 22)
+        title.Position = UDim2.new(0, 10, 0, 6)
+        title.BackgroundTransparency = 1
+        title.Text = text
+        title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.Font = Enum.Font.SourceSansBold
+        title.TextSize = 15
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.TextWrapped = true
+        title.Parent = btn
+
+        local descLabel = nil
+        if desc then
+            descLabel = Instance.new("TextLabel")
+            descLabel.Size = UDim2.new(1, -20, 0, 20)
+            descLabel.Position = UDim2.new(0, 10, 0, 32)
+            descLabel.BackgroundTransparency = 1
+            descLabel.Text = desc
+            descLabel.TextColor3 = Color3.fromRGB(150, 160, 180)
+            descLabel.Font = Enum.Font.SourceSans
+            descLabel.TextSize = 12
+            descLabel.TextXAlignment = Enum.TextXAlignment.Left
+            descLabel.TextWrapped = true
+            descLabel.Parent = btn
+        end
+
+        btn.MouseButton1Click:Connect(function()
+            if onClick then pcall(onClick) end
+            btn.BackgroundColor3 = Color3.fromRGB(50, 120, 255)
+            task.delay(0.2, function() if btn and btn.Parent then btn.BackgroundColor3 = Color3.fromRGB(35, 45, 70) end end)
+        end)
+        return btn
+    end
+
+    makeLobbyButton("Teleport to secret room", nil, 1, function() tpToCoords(-345.8, 10.9, 145.0) end)
+    makeLobbyButton("Teleport to a secret sign with text", "and a really scary message😯😯😯", 2, function() tpToCoords(-434.6, 6.5, 182.7) end)
+    makeLobbyButton("Teleport to skin changer room", nil, 3, function() tpToCoords(-228.0, 31.0, 187.7) end)
+    makeLobbyButton("Teleport to old Gorrby's store", nil, 4, function() tpToCoords(-306.6, 9.7, 110.5) end)
+    makeLobbyButton("Teleport to weird Bosker's(Dandy's)version", nil, 5, function() tpToCoords(-475.7, 4.3, 55.8) end)
+    makeLobbyButton("Teleport to actual player spawn(mb idk)", nil, 6, function() tpToCoords(-347.5, 76.7, 135.5) end)
+    makeLobbyButton("Teleport to starter toon selector", nil, 7, function() tpToCoords(-414.4, 84.7, 62.6) end)
+    makeLobbyButton("Teleport to the scene where you buy skins", nil, 8, function() tpToCoords(-396.2, 145.5, 121.1) end)
+    makeLobbyButton("Teleport to the scene where you buy skins", "but another one???7", 9, function() tpToCoords(-512.2, 89.4, 148.5) end)
+    makeLobbyButton("Teleport out of bounds", "theres some interesting content maybe youll find some interesting shit there", 10, function() tpToCoords(0, 500, 0) end)
+
+    makeLobbyButton("Show hidden stuff", "only out of bounds", 11, function()
+        local rs = game:GetService("ReplicatedStorage")
+        local ws = workspace
+        local moved = 0
+        for _, child in ipairs(rs:GetChildren()) do
+            if child:IsA("BasePart") or child:IsA("Model") or child:IsA("Folder") or child:IsA("MeshPart") or child:IsA("UnionOperation") then
+                local ok = pcall(function()
+                    local oldName = child.Name
+                    child.Name = "RS_" .. oldName
+                    child.Parent = ws
+                end)
+                if ok then moved = moved + 1 end
+            end
+        end
+        print("[Teesha] Show hidden stuff: moved", moved, "objects from ReplicatedStorage to Workspace")
+    end)
+end
+
+-- ==========================================
+-- 8. ОСТАЛЬНАЯ ЛОГИКА МЕНЮ
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if bindingFeature then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            bindingFeature.key = input.KeyCode
+            bindingFeature.ui.bindBtn.Text = "Bind: [" .. input.KeyCode.Name .. "]"
+            bindingFeature.ui.bindBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 70)
+            bindingFeature.ui.bindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            bindingFeature.ui.clearBindBtn.Visible = true
+            bindingFeature.ui.miniBtn.Position = UDim2.new(0, 235, 0, bindingFeature.ui.frame.Size.Y.Offset == 110 and 78 or 58)
+            
+            if bindingFeature.miniBtn and bindingFeature.miniBtn:FindFirstChild("KeyIndicator") then
+                bindingFeature.miniBtn.KeyIndicator.Text = input.KeyCode.Name
+                bindingFeature.miniBtn.KeyIndicator.Visible = true
+            end
+            bindingFeature = nil
+        end
+    else
+        for _, feature in pairs(Features) do
+            if feature.key == input.KeyCode then feature.Toggle() end
+        end
+    end
+end)
+
+local function createCategoryButton(name, color, order, targetMenu)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = color
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 16
+    btn.LayoutOrder = order
+    btn.Parent = leftPanel
+    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0.5, 0); corner.Parent = btn
+    local stroke = Instance.new("UIStroke"); stroke.Color = Color3.fromRGB(0, 0, 0); stroke.Thickness = 1; stroke.Transparency = 0.5; stroke.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        mainMenu.Visible = false
+        visualMenu.Visible = false
+        teleportMenu.Visible = false
+        autoMenu.Visible = false
+        funMenu.Visible = false
+        testMenu.Visible = false
+        if targetMenu then targetMenu.Visible = true end
+    end)
+end
+
+createCategoryButton("Main", Color3.fromRGB(50, 205, 50), 3, mainMenu)
+createCategoryButton("Visual", Color3.fromRGB(255, 215, 0), 2, visualMenu)
+createCategoryButton("Teleport", Color3.fromRGB(255, 140, 0), 1, teleportMenu)
+createCategoryButton("Automation", Color3.fromRGB(0, 200, 255), 4, autoMenu)
+createCategoryButton("Animations", Color3.fromRGB(138, 43, 226), 5, nil)
+createCategoryButton("Test", Color3.fromRGB(138, 43, 226), 6, testMenu)
+createCategoryButton("Fun", Color3.fromRGB(255, 105, 180), 7, funMenu)
+
+-- ==========================================
+-- 9. ПЛАВАЮЩАЯ КНОПКА И ПЕРЕТАСКИВАНИЕ
+-- ==========================================
+local floatBtn = Instance.new("ImageButton")
+floatBtn.Size = UDim2.new(0, 60, 0, 60)
+floatBtn.Position = UDim2.new(0, 10, 0.5, -30)
+floatBtn.BackgroundColor3 = Color3.fromRGB(0, 84, 227)
+floatBtn.BorderSizePixel = 2
+floatBtn.BorderColor3 = Color3.fromRGB(0, 60, 160)
+floatBtn.Image = ICON
+floatBtn.ScaleType = Enum.ScaleType.Fit
+floatBtn.Visible = false
+floatBtn.Parent = screen
+
+local floatHint = Instance.new("TextLabel")
+floatHint.Size = UDim2.new(0, 140, 0, 20)
+floatHint.Position = UDim2.new(0, 75, 0, 20)
+floatHint.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+floatHint.BackgroundTransparency = 0.2
+floatHint.Text = "RMB / hold = close"
+floatHint.TextColor3 = Color3.fromRGB(255, 255, 255)
+floatHint.Font = Enum.Font.SourceSansBold
+floatHint.TextSize = 11
+floatHint.Visible = false
+floatHint.Parent = screen
+local hintCorner = Instance.new("UICorner"); hintCorner.CornerRadius = UDim.new(0, 4); hintCorner.Parent = floatHint
+
+local fDragging, fDragStart, fDragStartPos, fMoved, fPressTime, fLongPressThread
+floatBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if getgenv().TeeshaCleanup then pcall(getgenv().TeeshaCleanup) end
+        return
+    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        fDragging = true
+        fMoved = false
+        fDragStart = input.Position
+        fDragStartPos = floatBtn.Position
+        fPressTime = tick()
+        fLongPressThread = task.delay(1.5, function()
+            if fDragging and not fMoved then
+                if getgenv().TeeshaCleanup then pcall(getgenv().TeeshaCleanup) end
+            end
+        end)
+    end
+end)
+
+floatBtn.InputChanged:Connect(function(input)
+    if fDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - fDragStart
+        if delta.Magnitude > 10 then
+            fMoved = true
+        end
+        if fMoved then
+            floatBtn.Position = UDim2.new(fDragStartPos.X.Scale, fDragStartPos.X.Offset + delta.X, fDragStartPos.Y.Scale, fDragStartPos.Y.Offset + delta.Y)
+            floatHint.Position = UDim2.new(floatBtn.Position.X.Scale, floatBtn.Position.X.Offset + 65, floatBtn.Position.Y.Scale, floatBtn.Position.Y.Offset + 20)
+        end
+    end
+end)
+
+floatBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if fDragging and not fMoved and (tick() - fPressTime) < 0.6 then
+            main.Visible = true
+            floatBtn.Visible = false
+            floatHint.Visible = false
+        end
+        fDragging = false
+    end
+end)
+
+floatBtn.MouseEnter:Connect(function()
+    floatHint.Position = UDim2.new(floatBtn.Position.X.Scale, floatBtn.Position.X.Offset + 65, floatBtn.Position.Y.Scale, floatBtn.Position.Y.Offset + 20)
+    floatHint.Visible = true
+end)
+floatBtn.MouseLeave:Connect(function()
+    floatHint.Visible = false
+end)
+
+closeBtn.MouseButton1Click:Connect(function() 
+    main.Visible = false
+    floatBtn.Visible = true 
+end)
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local s, sp = input.Position, main.Position
+        local ic, ie
+        ic = titleBar.InputChanged:Connect(function(i2)
+            if i2.UserInputType == Enum.UserInputType.MouseMovement or i2.UserInputType == Enum.UserInputType.Touch then
+                main.Position = UDim2.new(sp.X.Scale, sp.X.Offset + (i2.Position - s).X, sp.Y.Scale, sp.Y.Offset + (i2.Position - s).Y)
+            end
+        end)
+        ie = titleBar.InputEnded:Connect(function(i2)
+            if i2.UserInputType == Enum.UserInputType.MouseButton1 or i2.UserInputType == Enum.UserInputType.Touch then
+                ic:Disconnect(); ie:Disconnect()
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- 10. CLEANUP
+-- ==========================================
+getgenv().TeeshaCleanup = function()
+    pcall(removeJerkTool)
+    isGodActive = false
+    isHeavierActive = false
+    isLoopSpeedActive = false
+    isAntiVoidActive = false
+    isAntiVoidRising = false
+    getgenv().TeeshaNoclipActive = false
+    if godHealthConn then pcall(function() godHealthConn:Disconnect() end); godHealthConn = nil end
+    if heavierConn then pcall(function() heavierConn:Disconnect() end); heavierConn = nil end
+    if getgenv().TeeshaAntiVoidConn then pcall(function() getgenv().TeeshaAntiVoidConn:Disconnect() end); getgenv().TeeshaAntiVoidConn = nil end
+
+    for _, conn in pairs(getgenv().TeeshaLoops) do pcall(function() conn:Disconnect() end) end
+    if getgenv().TeeshaInfiniteJumpConn then getgenv().TeeshaInfiniteJumpConn:Disconnect() end
+    if getgenv().TeeshaEnableJumpThread then task.cancel(getgenv().TeeshaEnableJumpThread) end
+    if getgenv().TeeshaFlyActive then stopFly() end
+    
+    if next(getgenv().TeeshaAntiLagCache) ~= nil then
+        for obj, data in pairs(getgenv().TeeshaAntiLagCache) do
+            pcall(function()
+                if obj:IsA("BasePart") then
+                    obj.Material = data.Material
+                    obj.TextureID = data.TextureID
+                    obj.Transparency = data.Transparency
+                elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                    obj.Transparency = data.Transparency
+                elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
+                    obj.Enabled = data.Enabled
+                elseif obj:IsA("MeshPart") then
+                    obj.TextureID = data.TextureID
+                    obj.Material = data.Material
+                end
+            end)
+        end
+        getgenv().TeeshaAntiLagCache = {}
+    end
+    
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hum then hum.WalkSpeed = 16; hum.PlatformStand = false end
+        if hrp then hrp.Anchored = false end
+        for _, v in pairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = true end
+        end
+    end
+    local floor = workspace:FindFirstChild("CurrentFloor")
+    if floor then
+        for _, obj in ipairs(floor:GetDescendants()) do
+            if obj.Name == "ESP_Highlight" or obj.Name == "ESP_Billboard" then obj:Destroy() end
+        end
+    end
+    Lighting.Brightness = defaultLighting.Brightness
+    Lighting.FogEnd = defaultLighting.FogEnd
+    Lighting.GlobalShadows = defaultLighting.GlobalShadows
+    Lighting.OutdoorAmbient = defaultLighting.OutdoorAmbient
+    screen:Destroy()
+end
